@@ -1,13 +1,7 @@
 #![no_std]
-pub mod hci;
+pub mod host;
+pub mod baseband;
+
 extern crate alloc;
 
 pub type BDAddr = [u8; 6];
-
-pub enum BtCmd {
-    Test,
-}
-
-impl BtCmd {
-    pub fn exec(&self) {}
-}
