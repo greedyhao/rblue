@@ -4,10 +4,9 @@ use std::{
     thread,
 };
 
-use log::info;
 use rblue_core::{
-    baseband::{self, ble},
-    host::{self, hci::*},
+    baseband::{self},
+    host::hci::*,
     BDAddr,
 };
 
@@ -61,11 +60,17 @@ fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
     bb.set_upper_sender(host_tx);
     bb.set_lower_sender(phy.get_phy().clone());
 
-    bb.set_upper_send_packet(|this, data| if let Some(tx) = this.get_upper_sender() {});
+    bb.set_upper_send_packet(|this, data| {
+        if let Some(tx) = this.get_upper_sender() {
+            println!("bb->host {:?}", data);
+            tx.send(data).unwrap();
+        }
+    });
     bb.set_lower_send_packet(|this, data| {
         if let Some(tx) = this.get_lower_sender() {
             let mut packet = vec![this.id];
             packet.extend(data);
+            println!("bb->phy {:?}", packet);
             tx.send(packet).unwrap();
         }
     });
@@ -73,25 +78,28 @@ fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
     // baseband
     thread::spawn(move || loop {
         let packet = bb_rx.recv().unwrap();
-        println!("{:?} bb {} recv packet", packet, bb.id);
 
         let from = packet[0];
         let packet = packet[1..].to_vec();
         if from == 0 {
+            println!("host->bb {:?}", packet);
             bb.recv_host_packet(packet);
         } else {
+            println!("phy->bb {:?}", packet);
             bb.recv_phy_packet(packet)
         }
     });
 
-    let mut hci: Hci<Sender<Vec<u8>>> = Hci::new(bd_addr);
+    let mut hci: HCI<Sender<Vec<u8>>> = HCI::new(bd_addr);
     hci.set_sender(bb_tx);
-    hci.set_send_packet(|this, packet, data| {
+    hci.set_send_packet(|this, packet, opcode, param| {
         if let Some(tx) = this.get_sender() {
             println!("{:?} host send packet", this.get_bd_addr());
             let mut tmp = vec![0, packet as u8];
-            tmp.extend(this.get_bd_addr());
-            tmp.extend(data);
+            tmp.extend(opcode.to_le_bytes());
+            if let Some(param) = param {
+                tmp.extend(param);
+            }
             tx.send(tmp).unwrap();
         }
     });
@@ -117,13 +125,7 @@ fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
                 if let Some(data) = data {
                     println!("{:?} recv data", hci.get_bd_addr());
                     if data.len() > 0 {
-                        let packet = data[0];
-                        let data = (&data[1..]).to_owned();
-                        match packet {
-                            x if x == HciPacket::Command as u8 => hci.recv_ce_data(data),
-                            x if x == HciPacket::ACL as u8 => hci.recv_acl_data(data),
-                            _ => panic!("error packet"),
-                        }
+                        hci.recv_packet(data);
                     }
                 }
 
@@ -160,7 +162,7 @@ fn main() {
         sim_bb.run();
     });
 
-    app1.send(BTCmd::Connect(addr2)).unwrap();
+    // app1.send(BTCmd::LEConnect(addr2)).unwrap();
 
     // pend
     bb.join().unwrap();
