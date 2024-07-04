@@ -4,7 +4,8 @@ use crate::baseband::ControllerErrorCode;
 use alloc::vec;
 use log::info;
 
-use crate::host::hci::{CommandCompleteArg, HCIEvent};
+use crate::host::hci::HCIEvent;
+use crate::host::hci_cmd::*;
 
 pub struct HCICmdTable {
     flag: u16,

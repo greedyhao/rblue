@@ -1,17 +1,13 @@
+use super::hci_cmd::*;
+use super::*;
+
 use crate::alloc::borrow::ToOwned;
-use crate::BDAddr;
 
 use alloc::collections::LinkedList;
 use alloc::vec::Vec;
-use bitflags::bitflags;
 use log::info;
 
 use num_derive::FromPrimitive;
-use pub_fields::pub_fields;
-
-trait HCICmdSend {
-    fn send(&self, hci: &mut HCI);
-}
 
 trait HCICmdOpcode {
     fn get_opcode(&self) -> u16;
@@ -88,136 +84,6 @@ pub enum LEController {
     LECreateConnection = 0x000D,
 }
 
-#[pub_fields]
-#[derive(serde::Serialize)]
-pub struct CommandCompleteArg<T> {
-    num_hci_command_packets: u8,
-    opcode: u16,
-    return_param: T,
-}
-
-#[pub_fields]
-#[derive(serde::Serialize)]
-pub struct CreateConnectionArg {
-    bd_addr: BDAddr,
-    packet_type: PacketType,
-    page_scan_repetition_mode: PageScanRepetitionMode,
-    reserved: u8,
-    clock_offset: u16,
-    allow_role_switch: u8,
-}
-
-impl HCICmdSend for CreateConnectionArg {
-    fn send(&self, hci: &mut HCI) {
-        hci.send_cmd_with_param(
-            HCICmd::LinkControl as u8,
-            LinkControl::CreateConnection as u16,
-            bincode::serialize(self).unwrap(),
-        )
-    }
-}
-
-pub struct ResetArg {}
-
-impl HCICmdSend for ResetArg {
-    fn send(&self, hci: &mut HCI) {
-        hci.send_cmd_no_param(
-            HCICmd::ControllerAndBaseband as u8,
-            ControllerAndBaseband::Reset as u16,
-        );
-    }
-}
-
-pub struct ReadLocalSupportedCommandsArg {}
-
-impl HCICmdSend for ReadLocalSupportedCommandsArg {
-    fn send(&self, hci: &mut HCI) {
-        hci.send_cmd_no_param(
-            HCICmd::InformationalParam as u8,
-            InformationalParam::ReadLocalSupportedCommands as u16,
-        );
-    }
-}
-
-#[pub_fields]
-#[derive(serde::Serialize)]
-pub struct LECreateConnectionArg {
-    le_scan_interval: u16,
-    le_scan_window: u16,
-    initiator_filter_policy: bool,
-    peer_address_type: LEAddressType,
-    peer_address: BDAddr,
-    own_address_type: LEAddressType,
-    conn_interval_min: u16,
-    conn_interval_max: u16,
-    max_latency: u16,
-    supervision_timeout: u16,
-    min_ce_length: u16,
-    max_ce_length: u16,
-}
-
-impl HCICmdSend for LECreateConnectionArg {
-    fn send(&self, hci: &mut HCI) {
-        hci.send_cmd_with_param(
-            HCICmd::LEController as u8,
-            LEController::LECreateConnection as u16,
-            bincode::serialize(self).unwrap(),
-        );
-    }
-}
-
-bitflags! {
-    struct PacketType: u16 {
-        const NoUse2DH1 = 0x0001;
-        const NoUse3DH1 = 0x0002;
-        const MayUseDM1 = 0x0004;
-        const MayUseDH1 = 0x0008;
-        const NoUse2DH3 = 0x0100;
-        const NoUse3DH3 = 0x0200;
-        const MayUseDM3 = 0x0400;
-        const MayUseDH3 = 0x0800;
-        const NoUse2DH5 = 0x1000;
-        const NoUse3DH5 = 0x2000;
-        const MayUseDM5 = 0x4000;
-        const MayUseDH5 = 0x8000;
-    }
-}
-
-impl serde::Serialize for PacketType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = serializer.serialize_u16(self.bits());
-        s
-    }
-}
-
-#[derive(serde_repr::Serialize_repr)]
-#[repr(u8)]
-pub enum PageScanRepetitionMode {
-    R0 = 0,
-    R1,
-    R2,
-}
-
-#[derive(serde_repr::Serialize_repr)]
-#[repr(u8)]
-pub enum ScanEnable {
-    NoScansEnable,
-    InquiryEnablePageDisable,
-    InquiryDisablePageEnable,
-    InquiryEnablePageEnable,
-}
-
-#[derive(serde_repr::Serialize_repr)]
-#[repr(u8)]
-pub enum LEAddressType {
-    PublicDevice,
-    RandomDevice,
-    PublicIdentity,
-    RandomIdentity,
-}
 
 struct HCIConnection {
     remote: BDAddr,
@@ -419,13 +285,13 @@ impl HCI {
         }
     }
 
-    fn send_cmd_no_param(&mut self, ogf: u8, ocf: u16) {
+    pub fn send_cmd_no_param(&mut self, ogf: u8, ocf: u16) {
         info!("send cmd {} {}", ogf, ocf);
         if let Some(send) = self.send_packet {
             send(&self, HCIPacket::Command, into_opcode(ogf, ocf), None);
         }
     }
-    fn send_cmd_with_param(&mut self, ogf: u8, ocf: u16, param: Vec<u8>) {
+    pub fn send_cmd_with_param(&mut self, ogf: u8, ocf: u16, param: Vec<u8>) {
         info!("send cmd {} {} {:?}", ogf, ocf, param);
         if let Some(send) = self.send_packet {
             send(
