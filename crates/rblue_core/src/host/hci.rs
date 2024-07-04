@@ -56,7 +56,7 @@ impl HCICmdOpcode for LinkControl {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, FromPrimitive)]
 #[repr(u16)]
 pub enum ControllerAndBaseband {
     SetEventMask = 0x0001,
@@ -66,6 +66,19 @@ pub enum ControllerAndBaseband {
 impl HCICmdOpcode for ControllerAndBaseband {
     fn get_opcode(&self) -> u16 {
         let ogf = HCICmd::ControllerAndBaseband as u8;
+        into_opcode(ogf, *self as u16)
+    }
+}
+
+#[derive(Clone, Copy, FromPrimitive)]
+#[repr(u16)]
+pub enum InformationalParam {
+    ReadLocalSupportedCommands = 0x0002,
+}
+
+impl HCICmdOpcode for InformationalParam {
+    fn get_opcode(&self) -> u16 {
+        let ogf = HCICmd::InformationalParam as u8;
         into_opcode(ogf, *self as u16)
     }
 }
@@ -111,6 +124,17 @@ impl HCICmdSend for ResetArg {
         hci.send_cmd_no_param(
             HCICmd::ControllerAndBaseband as u8,
             ControllerAndBaseband::Reset as u16,
+        );
+    }
+}
+
+pub struct ReadLocalSupportedCommandsArg {}
+
+impl HCICmdSend for ReadLocalSupportedCommandsArg {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::InformationalParam as u8,
+            InformationalParam::ReadLocalSupportedCommands as u16,
         );
     }
 }
@@ -218,6 +242,22 @@ enum HCIState {
 enum HCISubState {
     SendReset,
     W4SendReset,
+    SendReadLocalSupportedCommands,
+    W4SendReadLocalSupportedCommands,
+    SendReadLocalSupportedFeatures,
+    W4SendReadLocalSupportedFeatures,
+    SendSetEventMask,
+    W4SendSetEventMask,
+    SendLESetEventMask,
+    W4SendLESetEventMask,
+    SendLEReadBufferSize,
+    W4SendLEReadBufferSize,
+    SendReadBufferSize,
+    W4SendReadBufferSize,
+    SendLEReadLocalSupportedFeatures,
+    W4SendLEReadLocalSupportedFeatures,
+    SendReadBDAddr,
+    W4SendReadBDAddr,
     End,
 }
 
@@ -276,13 +316,40 @@ impl HCI {
     }
 
     fn init_process(&mut self) {
+        use HCISubState::*;
         match self.sub_state {
-            HCISubState::SendReset => {
-                self.sub_state = HCISubState::W4SendReset;
+            SendReset => {
+                self.sub_state = W4SendReset;
                 let arg = ResetArg {};
                 arg.send(self);
             }
-            HCISubState::End => {
+            SendReadLocalSupportedCommands => {
+                self.sub_state = W4SendReadLocalSupportedCommands;
+                let arg = ReadLocalSupportedCommandsArg {};
+                arg.send(self);
+            }
+            SendReadLocalSupportedFeatures => {
+                self.sub_state = W4SendReadLocalSupportedFeatures;
+            }
+            SendSetEventMask => {
+                self.sub_state = W4SendSetEventMask;
+            }
+            SendLESetEventMask => {
+                self.sub_state = W4SendLESetEventMask;
+            }
+            SendLEReadBufferSize => {
+                self.sub_state = W4SendLEReadBufferSize;
+            }
+            SendReadBufferSize => {
+                self.sub_state = W4SendReadBufferSize;
+            }
+            SendLEReadLocalSupportedFeatures => {
+                self.sub_state = W4SendLEReadLocalSupportedFeatures;
+            }
+            SendReadBDAddr => {
+                self.sub_state = W4SendReadBDAddr;
+            }
+            End => {
                 self.state = HCIState::Working;
                 info!("HCI init done: {:?}", self.bd_addr);
             }
@@ -291,11 +358,38 @@ impl HCI {
     }
 
     fn init_process_event(&mut self, opcode: u16) {
+        use HCISubState::*;
         match self.sub_state {
-            HCISubState::W4SendReset => {
+            W4SendReset => {
                 if opcode == ControllerAndBaseband::Reset.get_opcode() {
-                    self.sub_state = HCISubState::End;
+                    self.sub_state = SendReadLocalSupportedCommands;
                 }
+            }
+            W4SendReadLocalSupportedCommands => {
+                if opcode == InformationalParam::ReadLocalSupportedCommands.get_opcode() {
+                    self.sub_state = SendReadLocalSupportedFeatures;
+                }
+            }
+            W4SendReadLocalSupportedFeatures => {
+                self.sub_state = SendSetEventMask;
+            }
+            W4SendSetEventMask => {
+                self.sub_state = SendLESetEventMask;
+            }
+            W4SendLESetEventMask => {
+                self.sub_state = SendLEReadBufferSize;
+            }
+            W4SendLEReadBufferSize => {
+                self.sub_state = SendReadBufferSize;
+            }
+            W4SendReadBufferSize => {
+                self.sub_state = SendLEReadLocalSupportedFeatures;
+            }
+            W4SendLEReadLocalSupportedFeatures => {
+                self.sub_state = SendReadBDAddr;
+            }
+            W4SendReadBDAddr => {
+                self.sub_state = End;
             }
             _ => {}
         }

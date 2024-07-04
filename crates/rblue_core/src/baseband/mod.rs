@@ -1,14 +1,14 @@
 pub mod ble;
 pub mod bt;
+mod hci;
 
 use alloc::vec;
 use alloc::vec::Vec;
 use log::info;
 
-use crate::host::hci::{
-    opcode_to_ocf, opcode_to_ogf, CommandCompleteArg, ControllerAndBaseband, HCICmd, HCIEvent,
-    HCIPacket,
-};
+use hci::HCI_CMD_TABLE;
+
+use crate::host::hci::{opcode_to_ocf, opcode_to_ogf, HCIPacket};
 
 pub struct Control {
     pub id: u8,
@@ -45,29 +45,12 @@ impl Control {
         }
         let _packet_type = packet[0];
         let opcode = u16::from_le_bytes(packet[1..3].try_into().unwrap());
-        let ogf = opcode_to_ogf(opcode);
-        let ocf = opcode_to_ocf(opcode);
-        info!("bb {} {}", ogf, ocf);
+        let ogf = opcode_to_ogf(opcode) - 1;
+        let ocf = opcode_to_ocf(opcode) - 1;
+        info!("bb {} {}", ogf + 1, ocf + 1);
 
-        if ogf == HCICmd::LEController as u8 {
-            // ble
-        } else if ogf == HCICmd::ControllerAndBaseband as u8 {
-            if ocf == ControllerAndBaseband::Reset as u16 {
-                info!("bb reset");
-                // reset
-                self.power_on();
-
-                let evt = CommandCompleteArg {
-                    num_hci_command_packets: 5,
-                    opcode,
-                    return_param: ControllerErrorCode::Ok,
-                };
-
-                self.send_event(
-                    HCIEvent::CommandComplete as u8,
-                    bincode::serialize(&evt).unwrap(),
-                );
-            }
+        if let Some(cmd) = &HCI_CMD_TABLE[ogf as usize][ocf as usize] {
+            (cmd.handle)(self, opcode);
         }
     }
 
