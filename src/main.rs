@@ -1,11 +1,14 @@
 use std::{
     collections::HashMap,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        OnceLock,
+    },
     thread,
 };
 
 use rblue_core::{
-    baseband::{self},
+    baseband::{self, Control},
     host::hci::*,
     BDAddr,
 };
@@ -49,31 +52,30 @@ impl SimPhy {
     }
 }
 
-fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
+fn create_new_hci(
+    phy: &mut SimPhy,
+    bd_addr: BDAddr,
+    bridge: &OnceLock<RBlueBridge>,
+    cb: &RBlueBridgeCB,
+) {
     let (app_tx, app_rx) = mpsc::channel();
     let (host_tx, host_rx) = mpsc::channel();
     let (bb_tx, bb_rx) = mpsc::channel();
 
+    let sim = RBlueBridge {
+        app_to_host: app_tx.clone(),
+        bb_to_host: host_tx.clone(),
+        host_to_bb: bb_tx.clone(),
+        bb_to_phy: phy.get_phy().clone(),
+    };
+    bridge.set(sim).unwrap();
+
     let id = phy.insert(bb_tx.clone());
 
     let mut bb = baseband::Control::new(id);
-    bb.set_upper_sender(host_tx);
-    bb.set_lower_sender(phy.get_phy().clone());
 
-    bb.set_upper_send_packet(|this, data| {
-        if let Some(tx) = this.get_upper_sender() {
-            println!("bb->host {:?}", data);
-            tx.send(data).unwrap();
-        }
-    });
-    bb.set_lower_send_packet(|this, data| {
-        if let Some(tx) = this.get_lower_sender() {
-            let mut packet = vec![this.id];
-            packet.extend(data);
-            println!("bb->phy {:?}", packet);
-            tx.send(packet).unwrap();
-        }
-    });
+    bb.set_upper_send_packet(cb.bb_to_host);
+    bb.set_lower_send_packet(cb.bb_to_phy);
 
     // baseband
     thread::spawn(move || loop {
@@ -82,27 +84,16 @@ fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
         let from = packet[0];
         let packet = packet[1..].to_vec();
         if from == 0 {
-            println!("host->bb {:?}", packet);
+            println!("{:?} host->bb {:?}", bb.id, packet);
             bb.recv_host_packet(packet);
         } else {
-            println!("phy->bb {:?}", packet);
+            println!("{:?} phy->bb {:?}", bb.id, packet);
             bb.recv_phy_packet(packet)
         }
     });
 
-    let mut hci: HCI<Sender<Vec<u8>>> = HCI::new(bd_addr);
-    hci.set_sender(bb_tx);
-    hci.set_send_packet(|this, packet, opcode, param| {
-        if let Some(tx) = this.get_sender() {
-            println!("{:?} host send packet", this.get_bd_addr());
-            let mut tmp = vec![0, packet as u8];
-            tmp.extend(opcode.to_le_bytes());
-            if let Some(param) = param {
-                tmp.extend(param);
-            }
-            tx.send(tmp).unwrap();
-        }
-    });
+    let mut hci = HCI::new(bd_addr);
+    hci.set_send_packet(cb.host_to_bb);
 
     // host
     thread::spawn(move || {
@@ -140,7 +131,53 @@ fn create_new_hci(phy: &mut SimPhy, bd_addr: BDAddr) -> Sender<BTCmd> {
             println!("{:?} loop end", hci.get_bd_addr());
         }
     });
-    return app_tx;
+}
+
+#[derive(Debug)]
+struct RBlueBridge {
+    app_to_host: Sender<BTCmd>,
+    host_to_bb: Sender<Vec<u8>>,
+    bb_to_phy: Sender<Vec<u8>>,
+    bb_to_host: Sender<Vec<u8>>,
+}
+
+struct RBlueBridgeCB {
+    host_to_bb: fn(&HCI, HCIPacket, u16, Option<Vec<u8>>),
+    bb_to_phy: fn(&Control, Vec<u8>),
+    bb_to_host: fn(&Control, Vec<u8>),
+}
+
+static APP1_SIM: OnceLock<RBlueBridge> = OnceLock::new();
+static APP2_SIM: OnceLock<RBlueBridge> = OnceLock::new();
+
+macro_rules! create_sim_stack_cb {
+    ($app_sim:expr) => {
+        RBlueBridgeCB {
+            host_to_bb: |hci, packet, opcode, param| {
+                println!("{:?} host send packet", hci.get_bd_addr());
+                if let Some(tx) = $app_sim.get() {
+                    let mut tmp = vec![0, packet as u8];
+                    tmp.extend(opcode.to_le_bytes());
+                    if let Some(param) = param {
+                        tmp.extend(param);
+                    }
+                    tx.host_to_bb.send(tmp).unwrap();
+                }
+            },
+            bb_to_phy: |this, data| {
+                if let Some(tx) = $app_sim.get() {
+                    println!("{:?} bb->phy {:?}", this.id, data);
+                    tx.bb_to_phy.send(data).unwrap();
+                }
+            },
+            bb_to_host: |this, data| {
+                if let Some(tx) = $app_sim.get() {
+                    println!("{:?} bb->host {:?}", this.id, data);
+                    tx.bb_to_host.send(data).unwrap();
+                }
+            },
+        }
+    };
 }
 
 fn main() {
@@ -149,20 +186,21 @@ fn main() {
 
     let mut sim_bb = SimPhy::new();
 
+    let cb1 = create_sim_stack_cb!(APP1_SIM);
     let addr1 = [1, 0, 0, 0, 0, 0];
+    create_new_hci(&mut sim_bb, addr1, &APP1_SIM, &cb1);
+
+    let cb2 = create_sim_stack_cb!(APP2_SIM);
     let addr2 = [2, 0, 0, 0, 0, 0];
-    let app1 = create_new_hci(&mut sim_bb, addr1);
-    let app2 = create_new_hci(&mut sim_bb, addr2);
+    create_new_hci(&mut sim_bb, addr2, &APP2_SIM, &cb2);
 
     // just test
-    app1.send(BTCmd::On).unwrap();
-    app2.send(BTCmd::On).unwrap();
+    APP1_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
+    APP2_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
 
     let bb: thread::JoinHandle<_> = thread::spawn(move || loop {
         sim_bb.run();
     });
-
-    // app1.send(BTCmd::LEConnect(addr2)).unwrap();
 
     // pend
     bb.join().unwrap();

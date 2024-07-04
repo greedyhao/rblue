@@ -10,7 +10,7 @@ use num_derive::FromPrimitive;
 use pub_fields::pub_fields;
 
 trait HCICmdSend {
-    fn send<T>(&self, hci: &mut HCI<T>);
+    fn send(&self, hci: &mut HCI);
 }
 
 trait HCICmdOpcode {
@@ -95,7 +95,7 @@ pub struct CreateConnectionArg {
 }
 
 impl HCICmdSend for CreateConnectionArg {
-    fn send<T>(&self, hci: &mut HCI<T>) {
+    fn send(&self, hci: &mut HCI) {
         hci.send_cmd_with_param(
             HCICmd::LinkControl as u8,
             LinkControl::CreateConnection as u16,
@@ -107,7 +107,7 @@ impl HCICmdSend for CreateConnectionArg {
 pub struct ResetArg {}
 
 impl HCICmdSend for ResetArg {
-    fn send<T>(&self, hci: &mut HCI<T>) {
+    fn send(&self, hci: &mut HCI) {
         hci.send_cmd_no_param(
             HCICmd::ControllerAndBaseband as u8,
             ControllerAndBaseband::Reset as u16,
@@ -133,7 +133,7 @@ pub struct LECreateConnectionArg {
 }
 
 impl HCICmdSend for LECreateConnectionArg {
-    fn send<T>(&self, hci: &mut HCI<T>) {
+    fn send(&self, hci: &mut HCI) {
         hci.send_cmd_with_param(
             HCICmd::LEController as u8,
             LEController::LECreateConnection as u16,
@@ -221,11 +221,10 @@ enum HCISubState {
     End,
 }
 
-pub struct HCI<T> {
+pub struct HCI {
     state: HCIState,
     sub_state: HCISubState,
 
-    sender: Option<T>,
     send_packet: Option<fn(&Self, HCIPacket, u16, Option<Vec<u8>>)>,
 
     connections: LinkedList<HCIConnection>,
@@ -235,13 +234,12 @@ pub struct HCI<T> {
     scan_enable: ScanEnable,
 }
 
-impl<T> HCI<T> {
+impl HCI {
     pub fn new(bd_addr: BDAddr) -> Self {
         HCI {
             state: HCIState::Off,
             sub_state: HCISubState::SendReset,
 
-            sender: None,
             send_packet: None,
 
             connections: LinkedList::new(),
@@ -254,14 +252,6 @@ impl<T> HCI<T> {
 
     pub fn get_bd_addr(&self) -> BDAddr {
         return self.bd_addr;
-    }
-
-    pub fn set_sender(&mut self, sender: T) {
-        self.sender = Some(sender);
-    }
-
-    pub fn get_sender(&self) -> &Option<T> {
-        return &self.sender;
     }
 
     pub fn set_send_packet(&mut self, send_packet: fn(&Self, HCIPacket, u16, Option<Vec<u8>>)) {
@@ -294,7 +284,7 @@ impl<T> HCI<T> {
             }
             HCISubState::End => {
                 self.state = HCIState::Working;
-                info!("HCI init done");
+                info!("HCI init done: {:?}", self.bd_addr);
             }
             _ => {}
         }
@@ -370,7 +360,7 @@ pub enum BTCmd {
 }
 
 impl BTCmd {
-    pub fn exec<T>(&self, hci: &mut HCI<T>) {
+    pub fn exec(&self, hci: &mut HCI) {
         info!("exec {:?}", self);
         match self {
             BTCmd::On => {
