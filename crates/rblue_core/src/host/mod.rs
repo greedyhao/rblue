@@ -2,6 +2,7 @@ pub mod hci;
 pub mod hci_cmd;
 
 pub use crate::BDAddr;
+use alloc::vec::Vec;
 pub use hci::HCICmd;
 
 pub use hci::LinkControl;
@@ -13,6 +14,7 @@ pub use hci::InformationalParam;
 pub use hci::LEController;
 
 use bitflags::bitflags;
+use rblue_proc_macro::EnumU8ToLeBytes;
 bitflags! {
     pub struct PacketType: u16 {
         const NoUse2DH1 = 0x0001;
@@ -30,17 +32,13 @@ bitflags! {
     }
 }
 
-impl serde::Serialize for PacketType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let s = serializer.serialize_u16(self.bits());
-        s
+impl PacketType {
+    pub fn to_le_bytes(&self) -> [u8; 2] {
+        self.bits().to_le_bytes()
     }
 }
 
-#[derive(serde_repr::Serialize_repr)]
+#[derive(EnumU8ToLeBytes)]
 #[repr(u8)]
 pub enum PageScanRepetitionMode {
     R0 = 0,
@@ -48,7 +46,6 @@ pub enum PageScanRepetitionMode {
     R2,
 }
 
-#[derive(serde_repr::Serialize_repr)]
 #[repr(u8)]
 pub enum ScanEnable {
     NoScansEnable,
@@ -57,7 +54,7 @@ pub enum ScanEnable {
     InquiryEnablePageEnable,
 }
 
-#[derive(serde_repr::Serialize_repr)]
+#[derive(EnumU8ToLeBytes)]
 #[repr(u8)]
 pub enum LEAddressType {
     PublicDevice,

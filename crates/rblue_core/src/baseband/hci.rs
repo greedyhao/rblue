@@ -97,7 +97,7 @@ fn reset(bb: &mut Control, opcode: u16) {
 
     bb.send_event(
         HCIEvent::CommandComplete as u8,
-        bincode::serialize(&evt).unwrap(),
+        evt.to_u8_array()
     );
 }
 

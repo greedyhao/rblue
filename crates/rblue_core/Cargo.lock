@@ -152,8 +152,18 @@ dependencies = [
  "num-derive",
  "num-traits",
  "pub-fields",
+ "rblue_proc_macro",
  "serde",
  "serde_repr",
+]
+
+[[package]]
+name = "rblue_proc_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

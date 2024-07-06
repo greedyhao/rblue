@@ -1,17 +1,34 @@
 use super::*;
 
 use pub_fields::pub_fields;
+extern crate rblue_proc_macro;
+use rblue_proc_macro::ToU8Array;
+
+pub trait RBlueToU8Array {
+    fn to_u8_array(&self) -> Vec<u8>;
+}
 
 #[pub_fields]
-#[derive(serde::Serialize)]
 pub struct CommandCompleteArg<T> {
     num_hci_command_packets: u8,
     opcode: u16,
     return_param: T,
 }
 
+impl<T> CommandCompleteArg<T>
+where
+    T: RBlueToU8Array,
+{
+    pub fn to_u8_array(&self) -> Vec<u8> {
+        let mut array = alloc::vec![self.num_hci_command_packets];
+        array.extend_from_slice(&self.opcode.to_le_bytes());
+        array.extend(self.return_param.to_u8_array());
+        array
+    }
+}
+
 #[pub_fields]
-#[derive(serde::Serialize)]
+#[derive(ToU8Array)]
 pub struct CreateConnectionArg {
     bd_addr: BDAddr,
     packet_type: PacketType,
@@ -26,7 +43,7 @@ impl HCICmdSend for CreateConnectionArg {
         hci.send_cmd_with_param(
             HCICmd::LinkControl as u8,
             LinkControl::CreateConnection as u16,
-            bincode::serialize(self).unwrap(),
+            self.to_u8_array(),
         )
     }
 }
@@ -54,7 +71,7 @@ impl HCICmdSend for ReadLocalSupportedCommandsArg {
 }
 
 #[pub_fields]
-#[derive(serde::Serialize)]
+#[derive(ToU8Array)]
 pub struct LECreateConnectionArg {
     le_scan_interval: u16,
     le_scan_window: u16,
@@ -75,7 +92,7 @@ impl HCICmdSend for LECreateConnectionArg {
         hci.send_cmd_with_param(
             HCICmd::LEController as u8,
             LEController::LECreateConnection as u16,
-            bincode::serialize(self).unwrap(),
+            self.to_u8_array(),
         );
     }
 }

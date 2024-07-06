@@ -7,8 +7,13 @@ use alloc::vec::Vec;
 use log::info;
 
 use hci::HCI_CMD_TABLE;
+use rblue_proc_macro::EnumU8ToLeBytes;
+use rblue_proc_macro::ToU8Array;
 
-use crate::host::hci::{opcode_to_ocf, opcode_to_ogf, HCIPacket};
+use crate::host::{
+    hci::{opcode_to_ocf, opcode_to_ogf, HCIPacket},
+    hci_cmd::RBlueToU8Array,
+};
 
 pub struct Control {
     pub id: u8,
@@ -72,7 +77,7 @@ impl Control {
     // }
 }
 
-#[derive(serde_repr::Serialize_repr)]
+#[derive(EnumU8ToLeBytes, ToU8Array)]
 #[repr(u8)]
 pub enum ControllerErrorCode {
     Ok,
