@@ -1,7 +1,6 @@
 use crate::baseband::Control;
 use crate::baseband::ControllerErrorCode;
 
-use alloc::vec;
 use log::info;
 
 use crate::host::hci::HCIEvent;
@@ -89,20 +88,28 @@ fn reset(bb: &mut Control, opcode: u16) {
     // reset
     bb.power_on();
 
-    let evt = CommandCompleteArg {
+    let ret = ResetRet {
+        status: ControllerErrorCode::Ok,
+    };
+    let evt = CommandCompleteEvt {
         num_hci_command_packets: 5,
         opcode,
-        return_param: ControllerErrorCode::Ok,
+        return_param: ret,
     };
 
-    bb.send_event(
-        HCIEvent::CommandComplete as u8,
-        evt.to_u8_array()
-    );
+    bb.send_event(HCIEvent::CommandComplete as u8, evt.to_u8_array());
 }
 
-fn read_local_supported_commands(bb: &mut Control, _opcode: u16) {
-    let mut tmp = vec![ControllerErrorCode::Ok as u8];
-    tmp.extend(HCI_CMD_SUPPORT_BYTES);
-    bb.send_event(HCIEvent::CommandComplete as u8, tmp);
+fn read_local_supported_commands(bb: &mut Control, opcode: u16) {
+    let ret = ReadLocalSupportedCommandsRet {
+        status: ControllerErrorCode::Ok,
+        supported_commands: HCI_CMD_SUPPORT_BYTES,
+    };
+
+    let evt = CommandCompleteEvt {
+        num_hci_command_packets: 5,
+        opcode,
+        return_param: ret,
+    };
+    bb.send_event(HCIEvent::CommandComplete as u8, evt.to_u8_array());
 }

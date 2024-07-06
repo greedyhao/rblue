@@ -9,13 +9,13 @@ pub trait RBlueToU8Array {
 }
 
 #[pub_fields]
-pub struct CommandCompleteArg<T> {
+pub struct CommandCompleteEvt<T> {
     num_hci_command_packets: u8,
     opcode: u16,
     return_param: T,
 }
 
-impl<T> CommandCompleteArg<T>
+impl<T> CommandCompleteEvt<T>
 where
     T: RBlueToU8Array,
 {
@@ -29,7 +29,7 @@ where
 
 #[pub_fields]
 #[derive(ToU8Array)]
-pub struct CreateConnectionArg {
+pub struct CreateConnectionCmd {
     bd_addr: BDAddr,
     packet_type: PacketType,
     page_scan_repetition_mode: PageScanRepetitionMode,
@@ -38,7 +38,7 @@ pub struct CreateConnectionArg {
     allow_role_switch: u8,
 }
 
-impl HCICmdSend for CreateConnectionArg {
+impl HCICmdSend for CreateConnectionCmd {
     fn send(&self, hci: &mut HCI) {
         hci.send_cmd_with_param(
             HCICmd::LinkControl as u8,
@@ -48,9 +48,9 @@ impl HCICmdSend for CreateConnectionArg {
     }
 }
 
-pub struct ResetArg {}
+pub struct ResetCmd {}
 
-impl HCICmdSend for ResetArg {
+impl HCICmdSend for ResetCmd {
     fn send(&self, hci: &mut HCI) {
         hci.send_cmd_no_param(
             HCICmd::ControllerAndBaseband as u8,
@@ -59,9 +59,15 @@ impl HCICmdSend for ResetArg {
     }
 }
 
-pub struct ReadLocalSupportedCommandsArg {}
+#[derive(ToU8Array)]
+#[pub_fields]
+pub struct ResetRet {
+    status: ControllerErrorCode,
+}
 
-impl HCICmdSend for ReadLocalSupportedCommandsArg {
+pub struct ReadLocalSupportedCommandsCmd {}
+
+impl HCICmdSend for ReadLocalSupportedCommandsCmd {
     fn send(&self, hci: &mut HCI) {
         hci.send_cmd_no_param(
             HCICmd::InformationalParam as u8,
@@ -70,9 +76,16 @@ impl HCICmdSend for ReadLocalSupportedCommandsArg {
     }
 }
 
+#[derive(ToU8Array)]
+#[pub_fields]
+pub struct ReadLocalSupportedCommandsRet {
+    status: ControllerErrorCode,
+    supported_commands: SupportedCommands,
+}
+
 #[pub_fields]
 #[derive(ToU8Array)]
-pub struct LECreateConnectionArg {
+pub struct LECreateConnectionCmd {
     le_scan_interval: u16,
     le_scan_window: u16,
     initiator_filter_policy: bool,
@@ -87,7 +100,7 @@ pub struct LECreateConnectionArg {
     max_ce_length: u16,
 }
 
-impl HCICmdSend for LECreateConnectionArg {
+impl HCICmdSend for LECreateConnectionCmd {
     fn send(&self, hci: &mut HCI) {
         hci.send_cmd_with_param(
             HCICmd::LEController as u8,

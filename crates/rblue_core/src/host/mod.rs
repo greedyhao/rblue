@@ -13,8 +13,13 @@ pub use hci::InformationalParam;
 // pub use hci::TestingCommand;
 pub use hci::LEController;
 
+pub use crate::baseband::ControllerErrorCode;
+
 use bitflags::bitflags;
 use rblue_proc_macro::EnumU8ToLeBytes;
+
+type SupportedCommands = [u8; 64];
+
 bitflags! {
     pub struct PacketType: u16 {
         const NoUse2DH1 = 0x0001;

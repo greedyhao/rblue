@@ -186,12 +186,12 @@ impl HCI {
         match self.sub_state {
             SendReset => {
                 self.sub_state = W4SendReset;
-                let arg = ResetArg {};
+                let arg = ResetCmd {};
                 arg.send(self);
             }
             SendReadLocalSupportedCommands => {
                 self.sub_state = W4SendReadLocalSupportedCommands;
-                let arg = ReadLocalSupportedCommandsArg {};
+                let arg = ReadLocalSupportedCommandsCmd {};
                 arg.send(self);
             }
             SendReadLocalSupportedFeatures => {
@@ -336,7 +336,7 @@ impl BTCmd {
                 }
 
                 // create connection
-                let arg = CreateConnectionArg {
+                let arg = CreateConnectionCmd {
                     bd_addr: *addr,
                     packet_type: PacketType::MayUseDH1,
                     page_scan_repetition_mode: PageScanRepetitionMode::R0,
@@ -353,7 +353,7 @@ impl BTCmd {
                         return;
                     }
                 }
-                let arg = LECreateConnectionArg {
+                let arg = LECreateConnectionCmd {
                     le_scan_interval: 16,
                     le_scan_window: 16,
                     initiator_filter_policy: false,
