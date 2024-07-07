@@ -24,7 +24,7 @@ pub fn derive_to_u8_array(input: TokenStream) -> TokenStream {
                 match ty {
                     Type::Path(type_path) => {
                         // eprintln!("Type: {:?}", type_path.path.segments.first().unwrap().ident);
-                        if type_path.path.is_ident("BDAddr") || type_path.path.is_ident("SupportedCommands") {
+                        if type_path.path.is_ident("BDAddr") || type_path.path.is_ident("SupportedCommands") || type_path.path.is_ident("LMPFeatures") {
                             quote! {
                                 array.extend(self.#name);
                             }

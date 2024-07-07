@@ -19,6 +19,7 @@ use bitflags::bitflags;
 use rblue_proc_macro::EnumU8ToLeBytes;
 
 type SupportedCommands = [u8; 64];
+type LMPFeatures = [u8; 8];
 
 bitflags! {
     pub struct PacketType: u16 {

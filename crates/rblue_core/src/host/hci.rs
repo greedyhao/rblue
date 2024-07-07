@@ -7,7 +7,8 @@ use alloc::collections::LinkedList;
 use alloc::vec::Vec;
 use log::info;
 
-use num_derive::FromPrimitive;
+use num::ToPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 
 trait HCICmdOpcode {
     fn get_opcode(&self) -> u16;
@@ -52,7 +53,7 @@ impl HCICmdOpcode for LinkControl {
     }
 }
 
-#[derive(Clone, Copy, FromPrimitive)]
+#[derive(FromPrimitive, ToPrimitive)]
 #[repr(u16)]
 pub enum ControllerAndBaseband {
     SetEventMask = 0x0001,
@@ -62,28 +63,42 @@ pub enum ControllerAndBaseband {
 impl HCICmdOpcode for ControllerAndBaseband {
     fn get_opcode(&self) -> u16 {
         let ogf = HCICmd::ControllerAndBaseband as u8;
-        into_opcode(ogf, *self as u16)
+        into_opcode(ogf, self.to_u16().unwrap())
     }
 }
 
-#[derive(Clone, Copy, FromPrimitive)]
+#[derive(FromPrimitive, ToPrimitive)]
 #[repr(u16)]
 pub enum InformationalParam {
     ReadLocalSupportedCommands = 0x0002,
+    ReadLocalSupportedFeatures,
+    ReadLocalExtendedSupportedFeatures,
+    ReadBufferSize,
+    ReadBDAddr = 0x0009,
 }
 
 impl HCICmdOpcode for InformationalParam {
     fn get_opcode(&self) -> u16 {
         let ogf = HCICmd::InformationalParam as u8;
-        into_opcode(ogf, *self as u16)
+        into_opcode(ogf, self.to_u16().unwrap())
     }
 }
 
+#[derive(FromPrimitive, ToPrimitive)]
 #[repr(u16)]
 pub enum LEController {
+    LESetEventMask = 0x0001,
+    LEReadBufferSize = 0x0002,
+    LEReadLocalSupportedFeatures,
     LECreateConnection = 0x000D,
 }
 
+impl HCICmdOpcode for LEController {
+    fn get_opcode(&self) -> u16 {
+        let ogf = HCICmd::LEController as u8;
+        into_opcode(ogf, self.to_u16().unwrap())
+    }
+}
 
 struct HCIConnection {
     remote: BDAddr,
@@ -196,24 +211,38 @@ impl HCI {
             }
             SendReadLocalSupportedFeatures => {
                 self.sub_state = W4SendReadLocalSupportedFeatures;
+                let arg = ReadLocalSupportedFeaturesCmd {};
+                arg.send(self);
             }
             SendSetEventMask => {
                 self.sub_state = W4SendSetEventMask;
+                let arg = SetEventMaskCmd { event_mask: 0 };
+                arg.send(self);
             }
             SendLESetEventMask => {
                 self.sub_state = W4SendLESetEventMask;
+                let arg = LESetEventMaskCmd { le_event_mask: 0 };
+                arg.send(self);
             }
             SendLEReadBufferSize => {
                 self.sub_state = W4SendLEReadBufferSize;
+                let arg = LEReadBufferSizeCmd {};
+                arg.send(self);
             }
             SendReadBufferSize => {
                 self.sub_state = W4SendReadBufferSize;
+                let arg = ReadBufferSizeCmd {};
+                arg.send(self);
             }
             SendLEReadLocalSupportedFeatures => {
                 self.sub_state = W4SendLEReadLocalSupportedFeatures;
+                let arg = LEReadLocalSupportedFeaturesCmd {};
+                arg.send(self);
             }
             SendReadBDAddr => {
                 self.sub_state = W4SendReadBDAddr;
+                let arg = ReadBDAddrCmd {};
+                arg.send(self);
             }
             End => {
                 self.state = HCIState::Working;
@@ -237,25 +266,39 @@ impl HCI {
                 }
             }
             W4SendReadLocalSupportedFeatures => {
-                self.sub_state = SendSetEventMask;
+                if opcode == InformationalParam::ReadLocalSupportedFeatures.get_opcode() {
+                    self.sub_state = SendSetEventMask;
+                }
             }
             W4SendSetEventMask => {
-                self.sub_state = SendLESetEventMask;
+                if opcode == ControllerAndBaseband::SetEventMask.get_opcode() {
+                    self.sub_state = SendLESetEventMask;
+                }
             }
             W4SendLESetEventMask => {
-                self.sub_state = SendLEReadBufferSize;
+                if opcode == LEController::LESetEventMask.get_opcode() {
+                    self.sub_state = SendLEReadBufferSize;
+                }
             }
             W4SendLEReadBufferSize => {
-                self.sub_state = SendReadBufferSize;
+                if opcode == LEController::LEReadBufferSize.get_opcode() {
+                    self.sub_state = SendReadBufferSize;
+                }
             }
             W4SendReadBufferSize => {
-                self.sub_state = SendLEReadLocalSupportedFeatures;
+                if opcode == InformationalParam::ReadBufferSize.get_opcode() {
+                    self.sub_state = SendLEReadLocalSupportedFeatures;
+                }
             }
             W4SendLEReadLocalSupportedFeatures => {
-                self.sub_state = SendReadBDAddr;
+                if opcode == LEController::LEReadLocalSupportedFeatures.get_opcode() {
+                    self.sub_state = SendReadBDAddr;
+                }
             }
             W4SendReadBDAddr => {
-                self.sub_state = End;
+                if opcode == InformationalParam::ReadBDAddr.get_opcode() {
+                    self.sub_state = End;
+                }
             }
             _ => {}
         }

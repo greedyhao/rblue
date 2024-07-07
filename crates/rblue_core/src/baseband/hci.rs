@@ -6,6 +6,15 @@ use log::info;
 use crate::host::hci::HCIEvent;
 use crate::host::hci_cmd::*;
 
+macro_rules! create_hci_cmd_table {
+    ($num:expr, $bit:expr, $handler:ident) => {
+        Some(HCICmdTable {
+            flag: compute_hci_cmd_flag($num, $bit),
+            handle: $handler,
+        })
+    };
+}
+
 pub struct HCICmdTable {
     flag: u16,
     pub handle: fn(bb: &mut Control, opcode: u16),
@@ -20,36 +29,62 @@ const fn compute_hci_cmd_flag(byten: u8, bit: u8) -> u16 {
 // const HCI_INQUIRY_CANCEL_BIT: u8 = 0x02;
 
 // byte5
+const HCI_SET_EVENT_MASK_BIT: u8 = 0x40;
 const HCI_RESET_BIT: u8 = 0x80;
 
 // byte14
 // const HCI_READ_LOCAL_VERSION_INFORMATION_BIT: u8 = 0x08;
 const HCI_READ_LOCAL_SUPPORTED_COMMANDS_BIT: u8 = 0x10;
-// const HCI_READ_LOCAL_SUPPORTED_FEATURES_BIT: u8 = 0x20;
+const HCI_READ_LOCAL_SUPPORTED_FEATURES_BIT: u8 = 0x20;
 // const HCI_READ_LOCAL_EXTENDED_FEATURES_BIT: u8 = 0x40;
-// const HCI_READ_BUFFER_SIZE_BIT: u8 = 0x80;
+const HCI_READ_BUFFER_SIZE_BIT: u8 = 0x80;
+
+// byte15
+const HCI_READ_BD_ADDR_BIT: u8 = 0x02;
+
+// byte25
+const HCI_LE_SET_EVENT_MASK_BIT: u8 = 0x01;
+const HCI_LE_READ_BUFFER_SIZE_BIT: u8 = 0x02;
+const HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_BIT: u8 = 0x04;
 
 const TABLE_LINK_CONTROL: &[Option<HCICmdTable>] = &[];
 const TABLE_LINK_POLICY: &[Option<HCICmdTable>] = &[];
 const TABLE_CONTROLLER_AND_BASEBAND: &[Option<HCICmdTable>] = &[
+    create_hci_cmd_table!(5, HCI_SET_EVENT_MASK_BIT, set_event_mask),
     None,
-    None,
-    Some(HCICmdTable {
-        flag: compute_hci_cmd_flag(5, HCI_RESET_BIT),
-        handle: reset,
-    }),
+    create_hci_cmd_table!(5, HCI_RESET_BIT, reset),
 ];
 const TABLE_INFORMATIONAL_PARAM: &[Option<HCICmdTable>] = &[
     None,
-    Some(HCICmdTable {
-        flag: compute_hci_cmd_flag(14, HCI_READ_LOCAL_SUPPORTED_COMMANDS_BIT),
-        handle: read_local_supported_commands,
-    }),
+    create_hci_cmd_table!(
+        14,
+        HCI_READ_LOCAL_SUPPORTED_COMMANDS_BIT,
+        read_local_supported_commands
+    ),
+    create_hci_cmd_table!(
+        14,
+        HCI_READ_LOCAL_SUPPORTED_FEATURES_BIT,
+        read_local_supported_features
+    ),
+    None,
+    create_hci_cmd_table!(14, HCI_READ_BUFFER_SIZE_BIT, read_buffer_size),
+    None,
+    None,
+    None,
+    create_hci_cmd_table!(15, HCI_READ_BD_ADDR_BIT, read_bd_address),
 ];
 const TABLE_STATUS_PARAM: &[Option<HCICmdTable>] = &[];
 const TABLE_TESTING_COMMAND: &[Option<HCICmdTable>] = &[];
 const TABLE_REVERSE: &[Option<HCICmdTable>] = &[];
-const TABLE_LE_CONTROLLER: &[Option<HCICmdTable>] = &[];
+const TABLE_LE_CONTROLLER: &[Option<HCICmdTable>] = &[
+    create_hci_cmd_table!(25, HCI_LE_SET_EVENT_MASK_BIT, le_set_event_mask),
+    create_hci_cmd_table!(25, HCI_LE_READ_BUFFER_SIZE_BIT, le_read_buffer_size),
+    create_hci_cmd_table!(
+        25,
+        HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_BIT,
+        le_read_local_supported_features
+    ),
+];
 
 pub const HCI_CMD_TABLE: &[&[Option<HCICmdTable>]; 8] = &[
     TABLE_LINK_CONTROL,
@@ -81,7 +116,31 @@ const fn compute_hci_cmd_support(table: &[&[Option<HCICmdTable>]; 8]) -> [u8; 64
     support
 }
 
-const HCI_CMD_SUPPORT_BYTES: [u8; 64] = compute_hci_cmd_support(HCI_CMD_TABLE);
+const HCI_CMD_SUPPORTED_BYTES: [u8; 64] = compute_hci_cmd_support(HCI_CMD_TABLE);
+
+const LMP_SUPPORTED_FEATURES_BYTES: [u8; 8] = [0; 8];
+
+fn bb_send_event<T>(bb: &mut Control, opcode: u16, ret: T)
+where
+    T: RBlueToU8Array,
+{
+    let evt = CommandCompleteEvt {
+        num_hci_command_packets: 5,
+        opcode,
+        return_param: ret,
+    };
+    bb.send_event(HCIEvent::CommandComplete as u8, evt.to_u8_array());
+}
+
+// Controller and Baseband Commands
+
+fn set_event_mask(bb: &mut Control, opcode: u16) {
+    let ret = SetEventMaskRet {
+        status: ControllerErrorCode::Ok,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
 
 fn reset(bb: &mut Control, opcode: u16) {
     info!("bb reset");
@@ -91,25 +150,76 @@ fn reset(bb: &mut Control, opcode: u16) {
     let ret = ResetRet {
         status: ControllerErrorCode::Ok,
     };
-    let evt = CommandCompleteEvt {
-        num_hci_command_packets: 5,
-        opcode,
-        return_param: ret,
-    };
 
-    bb.send_event(HCIEvent::CommandComplete as u8, evt.to_u8_array());
+    bb_send_event(bb, opcode, ret);
 }
+
+// Informational Parameters
 
 fn read_local_supported_commands(bb: &mut Control, opcode: u16) {
     let ret = ReadLocalSupportedCommandsRet {
         status: ControllerErrorCode::Ok,
-        supported_commands: HCI_CMD_SUPPORT_BYTES,
+        supported_commands: HCI_CMD_SUPPORTED_BYTES,
     };
 
-    let evt = CommandCompleteEvt {
-        num_hci_command_packets: 5,
-        opcode,
-        return_param: ret,
+    bb_send_event(bb, opcode, ret);
+}
+
+fn read_local_supported_features(bb: &mut Control, opcode: u16) {
+    let ret = ReadLocalSupportedFeaturesRet {
+        status: ControllerErrorCode::Ok,
+        lmp_feature: LMP_SUPPORTED_FEATURES_BYTES,
     };
-    bb.send_event(HCIEvent::CommandComplete as u8, evt.to_u8_array());
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn read_buffer_size(bb: &mut Control, opcode: u16) {
+    let ret = ReadBufferSizeRet {
+        status: ControllerErrorCode::Ok,
+        acl_data_packet_length: 0,
+        synchronous_data_packet_length: 0,
+        total_num_acl_data_packets: 0,
+        total_num_synchronous_data_packets: 0,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn read_bd_address(bb: &mut Control, opcode: u16) {
+    let ret = ReadBDAddrRet {
+        status: ControllerErrorCode::Ok,
+        bd_addr: [0; 6],
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+// LE Controller Commands
+
+fn le_set_event_mask(bb: &mut Control, opcode: u16) {
+    let ret = LeSetEventMaskRet {
+        status: ControllerErrorCode::Ok,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_read_buffer_size(bb: &mut Control, opcode: u16) {
+    let ret = LEReadBufferSizeRet {
+        status: ControllerErrorCode::Ok,
+        le_acl_data_packet_length: 0,
+        total_num_le_acl_data_packets: 0,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_read_local_supported_features(bb: &mut Control, opcode: u16) {
+    let ret = LEReadLocalSupportedFeaturesRet {
+        status: ControllerErrorCode::Ok,
+        le_features: 0,
+    };
+
+    bb_send_event(bb, opcode, ret);
 }

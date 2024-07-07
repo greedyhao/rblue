@@ -48,6 +48,29 @@ impl HCICmdSend for CreateConnectionCmd {
     }
 }
 
+// Controller and Baseband Commands
+
+#[derive(ToU8Array)]
+#[pub_fields]
+pub struct SetEventMaskCmd {
+    event_mask: u64,
+}
+
+impl HCICmdSend for SetEventMaskCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::ControllerAndBaseband as u8,
+            ControllerAndBaseband::SetEventMask as u16,
+        );
+    }
+}
+
+#[derive(ToU8Array)]
+#[pub_fields]
+pub struct SetEventMaskRet {
+    status: ControllerErrorCode,
+}
+
 pub struct ResetCmd {}
 
 impl HCICmdSend for ResetCmd {
@@ -65,6 +88,8 @@ pub struct ResetRet {
     status: ControllerErrorCode,
 }
 
+// Informational Parameters
+
 pub struct ReadLocalSupportedCommandsCmd {}
 
 impl HCICmdSend for ReadLocalSupportedCommandsCmd {
@@ -81,6 +106,129 @@ impl HCICmdSend for ReadLocalSupportedCommandsCmd {
 pub struct ReadLocalSupportedCommandsRet {
     status: ControllerErrorCode,
     supported_commands: SupportedCommands,
+}
+
+#[derive(ToU8Array)]
+pub struct ReadLocalSupportedFeaturesCmd {}
+
+impl HCICmdSend for ReadLocalSupportedFeaturesCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::InformationalParam as u8,
+            InformationalParam::ReadLocalSupportedFeatures as u16,
+        );
+    }
+}
+
+#[derive(ToU8Array)]
+#[pub_fields]
+pub struct ReadLocalSupportedFeaturesRet {
+    status: ControllerErrorCode,
+    lmp_feature: LMPFeatures,
+}
+
+#[derive(ToU8Array)]
+pub struct ReadBufferSizeCmd {}
+
+impl HCICmdSend for ReadBufferSizeCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::InformationalParam as u8,
+            InformationalParam::ReadBufferSize as u16,
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct ReadBufferSizeRet {
+    status: ControllerErrorCode,
+    acl_data_packet_length: u16,
+    synchronous_data_packet_length: u8,
+    total_num_acl_data_packets: u16,
+    total_num_synchronous_data_packets: u16,
+}
+
+#[derive(ToU8Array)]
+pub struct ReadBDAddrCmd {}
+
+impl HCICmdSend for ReadBDAddrCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::InformationalParam as u8,
+            InformationalParam::ReadBDAddr as u16,
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct ReadBDAddrRet {
+    status: ControllerErrorCode,
+    bd_addr: BDAddr,
+}
+
+// LE Controller Commands
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetEventMaskCmd {
+    le_event_mask: u64,
+}
+
+impl HCICmdSend for LESetEventMaskCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_with_param(
+            HCICmd::LEController as u8,
+            LEController::LESetEventMask as u16,
+            self.to_u8_array(),
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LeSetEventMaskRet {
+    status: ControllerErrorCode,
+}
+
+#[derive(ToU8Array)]
+pub struct LEReadBufferSizeCmd {}
+
+impl HCICmdSend for LEReadBufferSizeCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::LEController as u8,
+            LEController::LEReadBufferSize as u16,
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LEReadBufferSizeRet {
+    status: ControllerErrorCode,
+    le_acl_data_packet_length: u16,
+    total_num_le_acl_data_packets: u8,
+}
+
+#[derive(ToU8Array)]
+pub struct LEReadLocalSupportedFeaturesCmd {}
+
+impl HCICmdSend for LEReadLocalSupportedFeaturesCmd{
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::LEController as u8,
+            LEController::LEReadLocalSupportedFeatures as u16,
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LEReadLocalSupportedFeaturesRet {
+    status: ControllerErrorCode,
+    le_features: u64,
 }
 
 #[pub_fields]
