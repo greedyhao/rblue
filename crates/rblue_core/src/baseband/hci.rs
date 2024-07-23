@@ -46,6 +46,20 @@ const HCI_READ_BD_ADDR_BIT: u8 = 0x02;
 const HCI_LE_SET_EVENT_MASK_BIT: u8 = 0x01;
 const HCI_LE_READ_BUFFER_SIZE_BIT: u8 = 0x02;
 const HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_BIT: u8 = 0x04;
+// const HCI_LE_SET_RANDOM_ADDRESS_BIT: u8 = 0x10;
+const HCI_LE_SET_ADVERTISING_PARAMETERS_BIT: u8 = 0x20;
+const HCI_LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER_BIT: u8 = 0x40;
+const HCI_LE_SET_ADVERTISING_DATA_BIT: u8 = 0x80;
+
+// byte26
+const HCI_LE_SET_SCAN_RESPONSE_DATA_BIT: u8 = 0x01;
+const HCI_LE_SET_ADVERTISING_ENABLE_BIT: u8 = 0x02;
+// const HCI_LE_SET_SCAN_PARAMETERS_BIT: u8 = 0x04;
+// const HCI_LE_SET_SCAN_ENABLE_BIT: u8 = 0x08;
+// const HCI_LE_CREATE_CONNECTION_BIT: u8 = 0x10;
+// const HCI_LE_CREATE_CONNECTION_CANCEL_BIT: u8 = 0x20;
+// const HCI_LE_READ_FILTER_ACCEPT_LIST_SIZE_BIT: u8 = 0x40;
+// const HCI_LE_CLEAR_FILTER_ACCEPT_LIST_BIT: u8 = 0x80;
 
 const TABLE_LINK_CONTROL: &[Option<HCICmdTable>] = &[];
 const TABLE_LINK_POLICY: &[Option<HCICmdTable>] = &[];
@@ -83,6 +97,29 @@ const TABLE_LE_CONTROLLER: &[Option<HCICmdTable>] = &[
         25,
         HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_BIT,
         le_read_local_supported_features
+    ),
+    None,
+    None,
+    create_hci_cmd_table!(
+        25,
+        HCI_LE_SET_ADVERTISING_PARAMETERS_BIT,
+        le_set_advertising_parameters
+    ),
+    create_hci_cmd_table!(
+        25,
+        HCI_LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER_BIT,
+        le_read_advertising_physical_channel_tx_power
+    ),
+    create_hci_cmd_table!(25, HCI_LE_SET_ADVERTISING_DATA_BIT, le_set_advertising_data),
+    create_hci_cmd_table!(
+        26,
+        HCI_LE_SET_SCAN_RESPONSE_DATA_BIT,
+        le_set_scan_response_data
+    ),
+    create_hci_cmd_table!(
+        26,
+        HCI_LE_SET_ADVERTISING_ENABLE_BIT,
+        le_set_advertising_enable
     ),
 ];
 
@@ -219,6 +256,47 @@ fn le_read_local_supported_features(bb: &mut Control, opcode: u16) {
     let ret = LEReadLocalSupportedFeaturesRet {
         status: ControllerErrorCode::Ok,
         le_features: 0,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_set_advertising_parameters(bb: &mut Control, opcode: u16) {
+    let ret = LESetAdvertisingParametersRet {
+        status: ControllerErrorCode::Ok,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_read_advertising_physical_channel_tx_power(bb: &mut Control, opcode: u16) {
+    let ret = LEReadAdvertisingPhysicalChannelTxPowerRet {
+        status: ControllerErrorCode::Ok,
+        tx_power_level: 0,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_set_advertising_data(bb: &mut Control, opcode: u16) {
+    let ret = LESetAdvertisingDataRet {
+        status: ControllerErrorCode::Ok,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_set_scan_response_data(bb: &mut Control, opcode: u16) {
+    let ret = LESetScanResponseDataRet {
+        status: ControllerErrorCode::Ok,
+    };
+
+    bb_send_event(bb, opcode, ret);
+}
+
+fn le_set_advertising_enable(bb: &mut Control, opcode: u16) {
+    let ret = LESetAdvertisingEnableRet {
+        status: ControllerErrorCode::Ok,
     };
 
     bb_send_event(bb, opcode, ret);

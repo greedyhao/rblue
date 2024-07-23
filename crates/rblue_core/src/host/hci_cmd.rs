@@ -215,7 +215,7 @@ pub struct LEReadBufferSizeRet {
 #[derive(ToU8Array)]
 pub struct LEReadLocalSupportedFeaturesCmd {}
 
-impl HCICmdSend for LEReadLocalSupportedFeaturesCmd{
+impl HCICmdSend for LEReadLocalSupportedFeaturesCmd {
     fn send(&self, hci: &mut HCI) {
         hci.send_cmd_no_param(
             HCICmd::LEController as u8,
@@ -233,13 +233,129 @@ pub struct LEReadLocalSupportedFeaturesRet {
 
 #[pub_fields]
 #[derive(ToU8Array)]
+pub struct LESetAdvertisingParametersCmd {
+    advertising_interval_min: u16, // 0x0020 - 0x4000
+    advertising_interval_max: u16, // 0x0020 - 0x4000
+    advertising_type: AdvertisingType,
+    own_address_type: LEOwnAddressType,
+    peer_address_type: LEPeerAddressType2,
+    peer_address: BDAddr,
+    advertising_channel_map: u8,
+    advertising_filter_policy: AdvertisingFilterPolicy,
+}
+
+impl HCICmdSend for LESetAdvertisingParametersCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_with_param(
+            HCICmd::LEController as u8,
+            LEController::LESetAdvertisingParameters as u16,
+            self.to_u8_array(),
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetAdvertisingParametersRet {
+    status: ControllerErrorCode,
+}
+
+#[derive(ToU8Array)]
+pub struct LEReadAdvertisingPhysicalChannelTxPowerCmd {}
+
+impl HCICmdSend for LEReadAdvertisingPhysicalChannelTxPowerCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_no_param(
+            HCICmd::LEController as u8,
+            LEController::LEReadAdvertisingPhysicalChannelTxPower as u16,
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LEReadAdvertisingPhysicalChannelTxPowerRet {
+    status: ControllerErrorCode,
+    tx_power_level: u8,
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetAdvertisingDataCmd {
+    advertising_data_length: u8,
+    advertising_data: LEAdvPacket,
+}
+
+impl HCICmdSend for LESetAdvertisingDataCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_with_param(
+            HCICmd::LEController as u8,
+            LEController::LESetAdvertisingData as u16,
+            self.to_u8_array(),
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetAdvertisingDataRet {
+    status: ControllerErrorCode,
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetScanResponseDataCmd {
+    scan_response_data_length: u8,
+    scan_response_data: LEAdvPacket,
+}
+
+impl HCICmdSend for LESetScanResponseDataCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_with_param(
+            HCICmd::LEController as u8,
+            LEController::LESetScanResponseData as u16,
+            self.to_u8_array(),
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetScanResponseDataRet {
+    status: ControllerErrorCode,
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetAdvertisingEnableCmd {
+    advertiseing_enable: bool,
+}
+
+impl HCICmdSend for LESetAdvertisingEnableCmd {
+    fn send(&self, hci: &mut HCI) {
+        hci.send_cmd_with_param(
+            HCICmd::LEController as u8,
+            LEController::LESetAdvertisingEnable as u16,
+            self.to_u8_array(),
+        );
+    }
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
+pub struct LESetAdvertisingEnableRet {
+    status: ControllerErrorCode,
+}
+
+#[pub_fields]
+#[derive(ToU8Array)]
 pub struct LECreateConnectionCmd {
     le_scan_interval: u16,
     le_scan_window: u16,
     initiator_filter_policy: bool,
-    peer_address_type: LEAddressType,
+    peer_address_type: LEPeerAddressType,
     peer_address: BDAddr,
-    own_address_type: LEAddressType,
+    own_address_type: LEOwnAddressType,
     conn_interval_min: u16,
     conn_interval_max: u16,
     max_latency: u16,

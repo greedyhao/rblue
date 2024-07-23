@@ -90,6 +90,12 @@ pub enum LEController {
     LESetEventMask = 0x0001,
     LEReadBufferSize = 0x0002,
     LEReadLocalSupportedFeatures,
+    LESetRandomAddress = 0x0005,
+    LESetAdvertisingParameters,
+    LEReadAdvertisingPhysicalChannelTxPower,
+    LESetAdvertisingData,
+    LESetScanResponseData,
+    LESetAdvertisingEnable,
     LECreateConnection = 0x000D,
 }
 
@@ -359,6 +365,7 @@ pub enum BTCmd {
     Off,
     Connect(BDAddr),
 
+    LEAdvtise(bool),
     LEConnect(BDAddr),
 }
 
@@ -389,6 +396,50 @@ impl BTCmd {
                 };
                 arg.send(hci);
             }
+            BTCmd::LEAdvtise(enable) => {
+                if *enable {
+                    let cmd = LESetAdvertisingParametersCmd {
+                        advertising_interval_min: 0x20,
+                        advertising_interval_max: 0x40,
+                        advertising_type: AdvertisingType::ConnectableAndScannnable,
+                        own_address_type: LEOwnAddressType::PublicDevice,
+                        peer_address_type: LEPeerAddressType2::PublicDeviceOrPublicIdentity,
+                        peer_address: BDAddr::default(),
+                        advertising_channel_map: 0x7,
+                        advertising_filter_policy: AdvertisingFilterPolicy::UnFilter,
+                    };
+                    cmd.send(hci);
+
+                    let cmd = LEReadAdvertisingPhysicalChannelTxPowerCmd {};
+                    cmd.send(hci);
+
+                    let mut adv_data = [0; 31];
+                    adv_data[0] = 0xff;
+                    let cmd = LESetAdvertisingDataCmd {
+                        advertising_data_length: 1,
+                        advertising_data: adv_data,
+                    };
+                    cmd.send(hci);
+
+                    let mut adv_data = [0; 31];
+                    adv_data[0] = 0xfe;
+                    let cmd = LESetScanResponseDataCmd {
+                        scan_response_data_length: 0,
+                        scan_response_data: adv_data,
+                    };
+                    cmd.send(hci);
+
+                    let cmd = LESetAdvertisingEnableCmd {
+                        advertiseing_enable: true,
+                    };
+                    cmd.send(hci);
+                } else {
+                    let cmd = LESetAdvertisingEnableCmd {
+                        advertiseing_enable: false,
+                    };
+                    cmd.send(hci);
+                }
+            }
             BTCmd::LEConnect(addr) => {
                 for conn in hci.connections.iter() {
                     // already connected
@@ -400,9 +451,9 @@ impl BTCmd {
                     le_scan_interval: 16,
                     le_scan_window: 16,
                     initiator_filter_policy: false,
-                    peer_address_type: LEAddressType::PublicDevice,
+                    peer_address_type: LEPeerAddressType::PublicDevice,
                     peer_address: *addr,
-                    own_address_type: LEAddressType::PublicDevice,
+                    own_address_type: LEOwnAddressType::PublicDevice,
                     conn_interval_min: 6,
                     conn_interval_max: 7,
                     max_latency: 0,

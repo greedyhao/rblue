@@ -20,6 +20,7 @@ use rblue_proc_macro::EnumU8ToLeBytes;
 
 type SupportedCommands = [u8; 64];
 type LMPFeatures = [u8; 8];
+type LEAdvPacket = [u8; 31];
 
 bitflags! {
     pub struct PacketType: u16 {
@@ -62,11 +63,46 @@ pub enum ScanEnable {
 
 #[derive(EnumU8ToLeBytes)]
 #[repr(u8)]
-pub enum LEAddressType {
+pub enum LEOwnAddressType {
+    PublicDevice,
+    RandomDevice,
+    IRKOrPublic,
+    IRKOrRandom,
+}
+
+#[derive(EnumU8ToLeBytes)]
+#[repr(u8)]
+pub enum LEPeerAddressType {
     PublicDevice,
     RandomDevice,
     PublicIdentity,
     RandomIdentity,
+}
+
+#[derive(EnumU8ToLeBytes)]
+#[repr(u8)]
+pub enum LEPeerAddressType2 {
+    PublicDeviceOrPublicIdentity,
+    RandomDeviceOrRandomIdentity,
+}
+
+#[derive(EnumU8ToLeBytes)]
+#[repr(u8)]
+pub enum AdvertisingType {
+    ConnectableAndScannnable,
+    ConnectableHighDuty,
+    Scannable,
+    NonConnectable,
+    ConnectableLowDuty,
+}
+
+#[derive(EnumU8ToLeBytes)]
+#[repr(u8)]
+pub enum AdvertisingFilterPolicy {
+    UnFilter,
+    FilterOnlyScan,
+    FilterOnlyConnect,
+    FilterBoth,
 }
 
 use crate::host::hci::HCI;
