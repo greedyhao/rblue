@@ -108,6 +108,8 @@ impl HCICmdOpcode for LEController {
 
 struct HCIConnection {
     remote: BDAddr,
+    #[allow(dead_code)]
+    addr_type: BDAddrType,
 }
 
 #[repr(u8)]
@@ -118,7 +120,7 @@ pub enum HCIPacket {
     Event,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, PartialOrd)]
 enum HCIState {
     Off,
     Initializing,
@@ -149,6 +151,7 @@ enum HCISubState {
 }
 
 pub struct HCI {
+    // config: HCIConfigParam,
     state: HCIState,
     sub_state: HCISubState,
 
@@ -159,11 +162,24 @@ pub struct HCI {
     bd_addr: BDAddr,
 
     scan_enable: ScanEnable,
+
+    le_advertisements_interval_min: u16,
+    le_advertisements_interval_max: u16,
+    le_advertisements_type: AdvertisingType,
+    le_own_address_type: LEAddressType,
+    le_advertisements_peer_address_type: LEAddressType,
+    le_advertisements_peer_address: BDAddr,
+    le_advertisements_channel_map: u8,
+    le_advertisements_filter_policy: AdvertisingFilterPolicy,
+
+    le_advertisements_state: LEAdvertisementsState,
+    le_advertisements_todo: LEAdvertisementsTodo,
 }
 
 impl HCI {
     pub fn new(bd_addr: BDAddr) -> Self {
         HCI {
+            // config: HCIConfigParam::default(),
             state: HCIState::Off,
             sub_state: HCISubState::SendReset,
 
@@ -174,6 +190,18 @@ impl HCI {
             bd_addr,
 
             scan_enable: ScanEnable::NoScansEnable,
+
+            le_advertisements_interval_min: 0x0800,
+            le_advertisements_interval_max: 0x0800,
+            le_advertisements_type: AdvertisingType::ConnectableAndScannnable,
+            le_own_address_type: LEAddressType::PublicDevice,
+            le_advertisements_peer_address_type: LEAddressType::PublicDevice,
+            le_advertisements_peer_address: BDAddr::default(),
+            le_advertisements_channel_map: 0x07,
+            le_advertisements_filter_policy: AdvertisingFilterPolicy::UnFilter,
+
+            le_advertisements_state: LEAdvertisementsState::Idle,
+            le_advertisements_todo: LEAdvertisementsTodo::Idle,
         }
     }
 
@@ -199,7 +227,10 @@ impl HCI {
     fn run(&mut self) {
         if self.state == HCIState::Initializing {
             self.init_process();
+            return;
         }
+
+        self.run_gap_le();
     }
 
     fn init_process(&mut self) {
@@ -310,6 +341,65 @@ impl HCI {
         }
     }
 
+    fn run_gap_le(&mut self) {
+        // Phase 1: collect what to stop
+        let mut advertising_stop = false;
+        if self
+            .le_advertisements_state
+            .contains(LEAdvertisementsState::Active)
+        {
+            if self
+                .le_advertisements_todo
+                .contains(LEAdvertisementsTodo::SetParams)
+            {
+                advertising_stop = true;
+            }
+        }
+
+        // Phase 2: stop everything that should be off during modifications
+        if advertising_stop {
+            let cmd = LESetAdvertisingEnableCmd {
+                advertiseing_enable: false,
+            };
+            cmd.send(self);
+        }
+
+        // Phase 3: modify
+        if self
+            .le_advertisements_todo
+            .contains(LEAdvertisementsTodo::SetParams)
+        {
+            self.le_advertisements_todo
+                .remove(LEAdvertisementsTodo::SetParams);
+            let cmd = LESetAdvertisingParametersCmd {
+                advertising_interval_min: self.le_advertisements_interval_min,
+                advertising_interval_max: self.le_advertisements_interval_max,
+                advertising_type: self.le_advertisements_type.clone(),
+                own_address_type: self.le_own_address_type.clone(),
+                peer_address_type: LEAddressType2::from(
+                    self.le_advertisements_peer_address_type.clone(),
+                ),
+                peer_address: self.le_advertisements_peer_address,
+                advertising_channel_map: self.le_advertisements_channel_map,
+                advertising_filter_policy: self.le_advertisements_filter_policy.clone(),
+            };
+            cmd.send(self);
+        }
+
+        // Phase 4: restore state
+        if self
+            .le_advertisements_state
+            .contains(LEAdvertisementsState::Enabled)
+        {
+            self.le_advertisements_state
+                .remove(LEAdvertisementsState::Enabled);
+            let cmd = LESetAdvertisingEnableCmd {
+                advertiseing_enable: true,
+            };
+            cmd.send(self);
+        }
+    }
+
     fn power_on(&mut self) {
         self.state = HCIState::Initializing;
         self.sub_state = HCISubState::SendReset;
@@ -328,7 +418,10 @@ impl HCI {
         match event {
             Some(HCIEvent::CommandComplete) => {
                 let opcode = u16::from_le_bytes(data[3..5].try_into().unwrap());
-                self.init_process_event(opcode);
+
+                if self.state < HCIState::Working {
+                    self.init_process_event(opcode);
+                }
             }
             _ => {}
         }
@@ -359,6 +452,43 @@ impl HCI {
     // }
 }
 
+// gap
+
+// le
+
+pub fn gap_advertisements_set_params(
+    hci: &mut HCI,
+    adv_int_min: u16,
+    adv_int_max: u16,
+    adv_type: AdvertisingType,
+    peer_addr_type: LEAddressType,
+    peer_addr: BDAddr,
+    channel_map: u8,
+    filter_policy: AdvertisingFilterPolicy,
+) {
+    hci.le_advertisements_interval_min = adv_int_min;
+    hci.le_advertisements_interval_max = adv_int_max;
+    hci.le_advertisements_type = adv_type;
+    hci.le_advertisements_peer_address_type = peer_addr_type;
+    hci.le_advertisements_peer_address = peer_addr;
+    hci.le_advertisements_channel_map = channel_map;
+    hci.le_advertisements_filter_policy = filter_policy;
+    hci.run();
+}
+
+pub fn gap_advertisements_enable(hci: &mut HCI, enable: bool) {
+    if enable {
+        hci.le_advertisements_state
+            .insert(LEAdvertisementsState::Enabled);
+    } else {
+        hci.le_advertisements_state
+            .remove(LEAdvertisementsState::Enabled);
+    }
+    hci.run();
+}
+
+// api
+
 #[derive(Debug)]
 pub enum BTCmd {
     On,
@@ -384,6 +514,11 @@ impl BTCmd {
                         return;
                     }
                 }
+                let conn = HCIConnection {
+                    remote: *addr,
+                    addr_type: BDAddrType::Classic,
+                };
+                hci.connections.push_back(conn);
 
                 // create connection
                 let arg = CreateConnectionCmd {
@@ -398,47 +533,13 @@ impl BTCmd {
             }
             BTCmd::LEAdvtise(enable) => {
                 if *enable {
-                    let cmd = LESetAdvertisingParametersCmd {
-                        advertising_interval_min: 0x20,
-                        advertising_interval_max: 0x40,
-                        advertising_type: AdvertisingType::ConnectableAndScannnable,
-                        own_address_type: LEOwnAddressType::PublicDevice,
-                        peer_address_type: LEPeerAddressType2::PublicDeviceOrPublicIdentity,
-                        peer_address: BDAddr::default(),
-                        advertising_channel_map: 0x7,
-                        advertising_filter_policy: AdvertisingFilterPolicy::UnFilter,
-                    };
-                    cmd.send(hci);
-
-                    let cmd = LEReadAdvertisingPhysicalChannelTxPowerCmd {};
-                    cmd.send(hci);
-
-                    let mut adv_data = [0; 31];
-                    adv_data[0] = 0xff;
-                    let cmd = LESetAdvertisingDataCmd {
-                        advertising_data_length: 1,
-                        advertising_data: adv_data,
-                    };
-                    cmd.send(hci);
-
-                    let mut adv_data = [0; 31];
-                    adv_data[0] = 0xfe;
-                    let cmd = LESetScanResponseDataCmd {
-                        scan_response_data_length: 0,
-                        scan_response_data: adv_data,
-                    };
-                    cmd.send(hci);
-
-                    let cmd = LESetAdvertisingEnableCmd {
-                        advertiseing_enable: true,
-                    };
-                    cmd.send(hci);
+                    hci.le_advertisements_state
+                        .insert(LEAdvertisementsState::Enabled);
                 } else {
-                    let cmd = LESetAdvertisingEnableCmd {
-                        advertiseing_enable: false,
-                    };
-                    cmd.send(hci);
+                    hci.le_advertisements_state
+                        .remove(LEAdvertisementsState::Enabled);
                 }
+                hci.run();
             }
             BTCmd::LEConnect(addr) => {
                 for conn in hci.connections.iter() {
@@ -451,9 +552,9 @@ impl BTCmd {
                     le_scan_interval: 16,
                     le_scan_window: 16,
                     initiator_filter_policy: false,
-                    peer_address_type: LEPeerAddressType::PublicDevice,
+                    peer_address_type: LEAddressType::PublicDevice,
                     peer_address: *addr,
-                    own_address_type: LEOwnAddressType::PublicDevice,
+                    own_address_type: LEAddressType::PublicDevice,
                     conn_interval_min: 6,
                     conn_interval_max: 7,
                     max_latency: 0,

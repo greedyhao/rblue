@@ -188,7 +188,7 @@ impl HCICmdSend for LESetEventMaskCmd {
 
 #[pub_fields]
 #[derive(ToU8Array)]
-pub struct LeSetEventMaskRet {
+pub struct LESetEventMaskRet {
     status: ControllerErrorCode,
 }
 
@@ -237,8 +237,8 @@ pub struct LESetAdvertisingParametersCmd {
     advertising_interval_min: u16, // 0x0020 - 0x4000
     advertising_interval_max: u16, // 0x0020 - 0x4000
     advertising_type: AdvertisingType,
-    own_address_type: LEOwnAddressType,
-    peer_address_type: LEPeerAddressType2,
+    own_address_type: LEAddressType,
+    peer_address_type: LEAddressType2,
     peer_address: BDAddr,
     advertising_channel_map: u8,
     advertising_filter_policy: AdvertisingFilterPolicy,
@@ -353,9 +353,9 @@ pub struct LECreateConnectionCmd {
     le_scan_interval: u16,
     le_scan_window: u16,
     initiator_filter_policy: bool,
-    peer_address_type: LEPeerAddressType,
+    peer_address_type: LEAddressType,
     peer_address: BDAddr,
-    own_address_type: LEOwnAddressType,
+    own_address_type: LEAddressType,
     conn_interval_min: u16,
     conn_interval_max: u16,
     max_latency: u16,

@@ -235,7 +235,7 @@ fn read_bd_address(bb: &mut Control, opcode: u16) {
 // LE Controller Commands
 
 fn le_set_event_mask(bb: &mut Control, opcode: u16) {
-    let ret = LeSetEventMaskRet {
+    let ret = LESetEventMaskRet {
         status: ControllerErrorCode::Ok,
     };
 
