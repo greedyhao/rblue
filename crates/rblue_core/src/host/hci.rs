@@ -358,6 +358,8 @@ impl HCI {
 
         // Phase 2: stop everything that should be off during modifications
         if advertising_stop {
+            self.le_advertisements_state
+                .remove(LEAdvertisementsState::Active);
             let cmd = LESetAdvertisingEnableCmd {
                 advertiseing_enable: false,
             };
@@ -390,9 +392,11 @@ impl HCI {
         if self
             .le_advertisements_state
             .contains(LEAdvertisementsState::Enabled)
+            && !self
+                .le_advertisements_state
+                .contains(LEAdvertisementsState::Active)
         {
-            self.le_advertisements_state
-                .remove(LEAdvertisementsState::Enabled);
+            self.le_advertisements_state |= LEAdvertisementsState::Active;
             let cmd = LESetAdvertisingEnableCmd {
                 advertiseing_enable: true,
             };
