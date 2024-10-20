@@ -59,76 +59,57 @@ fn create_new_hci(
     cb: &RBlueBridgeCB,
 ) {
     let (app_tx, app_rx) = mpsc::channel();
-    let (host_tx, host_rx) = mpsc::channel();
-    let (bb_tx, bb_rx) = mpsc::channel();
+    let (tohost_tx, tohost_rx) = mpsc::channel();
+    let (tobb_tx, tobb_rx) = mpsc::channel();
 
     let sim = RBlueBridge {
         app_to_host: app_tx.clone(),
-        bb_to_host: host_tx.clone(),
-        host_to_bb: bb_tx.clone(),
+        bb_to_host: tohost_tx.clone(),
+        host_to_bb: tobb_tx.clone(),
         bb_to_phy: phy.get_phy().clone(),
     };
     bridge.set(sim).unwrap();
 
-    let id = phy.insert(bb_tx.clone());
+    let id = phy.insert(tobb_tx.clone());
 
     let mut bb = baseband::Control::new(id);
 
     bb.set_upper_send_packet(cb.bb_to_host);
     bb.set_lower_send_packet(cb.bb_to_phy);
 
-    // baseband
-    thread::spawn(move || loop {
-        let packet = bb_rx.recv().unwrap();
-
-        let from = packet[0];
-        let packet = packet[1..].to_vec();
-        if from == 0 {
-            println!("{:?} host->bb {:?}", bb.id, packet);
-            bb.recv_host_packet(packet);
-        } else {
-            println!("{:?} phy->bb {:?}", bb.id, packet);
-            bb.recv_phy_packet(packet)
-        }
-    });
-
     let mut hci = HCI::new(bd_addr);
     hci.set_send_packet(cb.host_to_bb);
 
+    use thread_priority::*;
     // host
     thread::spawn(move || {
-        let mut cmd: Option<BTCmd> = None;
+        set_current_thread_priority(ThreadPriority::Crossplatform(2_u8.try_into().unwrap()))
+            .unwrap();
         loop {
-            if cmd.is_none() {
-                cmd = Some(app_rx.recv().unwrap());
-            }
-            println!("{:?} recv app", hci.get_bd_addr());
-            cmd.unwrap().exec(&mut hci);
-
-            println!("{:?} loop start", hci.get_bd_addr());
-            loop {
-                let data = match host_rx.try_recv() {
-                    Ok(data) => Some(data),
-                    Err(_) => None,
-                };
-
-                // process data
-                if let Some(data) = data {
-                    println!("{:?} recv data", hci.get_bd_addr());
-                    if data.len() > 0 {
-                        hci.recv_packet(data);
-                    }
-                }
-
-                // do something here
-
-                // check if there is a command
-                cmd = app_rx.try_recv().map_or(None, |cmd| Some(cmd));
-                if cmd.is_some() {
-                    break;
+            // check host data
+            let host_data = tohost_rx.try_recv().ok();
+            if let Some(host_data) = host_data {
+                println!("{:?} recv host", hci.get_bd_addr());
+                if host_data.len() > 0 {
+                    hci.recv_packet(host_data);
                 }
             }
-            println!("{:?} loop end", hci.get_bd_addr());
+
+            // check bb data
+            let bb_data = tobb_rx.try_recv().ok();
+            if let Some(bb_data) = bb_data {
+                println!("{:?} recv bb", hci.get_bd_addr());
+                bb.recv_host_packet(bb_data);
+            }
+
+            // check command
+            let cmd = app_rx.try_recv().ok();
+            if let Some(cmd) = cmd {
+                println!("{:?} recv app", hci.get_bd_addr());
+                cmd.exec(&mut hci);
+            }
+
+            // check pending
         }
     });
 }
@@ -156,7 +137,7 @@ macro_rules! create_sim_stack_cb {
             host_to_bb: |hci, packet, opcode, param| {
                 println!("{:?} host send packet", hci.get_bd_addr());
                 if let Some(tx) = $app_sim.get() {
-                    let mut tmp = vec![0, packet as u8];
+                    let mut tmp = vec![packet as u8];
                     tmp.extend(opcode.to_le_bytes());
                     if let Some(param) = param {
                         tmp.extend(param);
@@ -184,6 +165,9 @@ fn main() {
     env_logger::init();
     log::debug!("debug log test");
 
+    use thread_priority::*;
+    set_current_thread_priority(ThreadPriority::Crossplatform(0_u8.try_into().unwrap())).unwrap();
+
     let mut sim_bb = SimPhy::new();
 
     let cb1 = create_sim_stack_cb!(APP1_SIM);
@@ -196,12 +180,22 @@ fn main() {
 
     // just test
     APP1_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
-    APP2_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
+    // APP2_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
 
     let bb: thread::JoinHandle<_> = thread::spawn(move || loop {
         sim_bb.run();
     });
 
+    // wait hci init
+    use std::time::Duration;
+    std::thread::sleep(Duration::from_secs(1));
+
+    APP1_SIM
+        .get()
+        .unwrap()
+        .app_to_host
+        .send(BTCmd::LEAdvtise(true))
+        .unwrap();
     // pend
     bb.join().unwrap();
 }
