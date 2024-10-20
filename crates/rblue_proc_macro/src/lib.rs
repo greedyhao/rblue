@@ -112,3 +112,57 @@ pub fn derive_enum_u8_to_le_bytes(input: TokenStream) -> TokenStream {
     // Convert the expanded implementation back into a TokenStream and return it
     TokenStream::from(expanded)
 }
+
+#[proc_macro_derive(FromBytes)]
+pub fn from_bytes_derive(input: TokenStream) -> TokenStream {
+    // 解析输入的 Rust 代码为 AST
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let expanded = match input.data {
+        Data::Struct(data) => {
+            let field_parsers = match data.fields {
+                Fields::Named(ref fields) => {
+                    fields.named.iter().enumerate().map(|(i, f)| {
+                        let name = &f.ident;
+                        let ty = &f.ty;
+                        if quote!(#ty).to_string() == "bool" {
+                            quote! {
+                                #name: bytes[#i] != 0
+                            }
+                        } else {
+                            quote! {
+                                #name: <#ty>::from_le_bytes(bytes[#i..#i+core::mem::size_of::<#ty>()].try_into().ok()?)
+                            }
+                        }
+                    }).collect::<Vec<_>>()
+                }
+                Fields::Unnamed(ref fields) => {
+                    fields.unnamed.iter().enumerate().map(|(i, f)| {
+                        let ty = &f.ty;
+                        quote! {
+                            <#ty>::from_le_bytes(bytes[#i..#i+core::mem::size_of::<#ty>()].try_into().ok()?)
+                        }
+                    }).collect::<Vec<_>>()
+                }
+                Fields::Unit => vec![],
+            };
+
+            quote! {
+                impl RBlueFromU8Array for #name {
+                    fn from_u8_array(bytes: &[u8]) -> Option<Self> {
+                        if bytes.len() != core::mem::size_of::<Self>() {
+                            return None;
+                        }
+                        Some(#name {
+                            #(#field_parsers),*
+                        })
+                    }
+                }
+            }
+        }
+        _ => unimplemented!(),
+    };
+
+    TokenStream::from(expanded)
+}

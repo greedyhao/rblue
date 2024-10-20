@@ -55,7 +55,7 @@ impl Control {
         info!("bb {} {}", ogf + 1, ocf + 1);
 
         if let Some(cmd) = &HCI_CMD_TABLE[ogf as usize][ocf as usize] {
-            (cmd.handle)(self, opcode);
+            (cmd.handle)(self, opcode, &packet[3..]);
         }
     }
 

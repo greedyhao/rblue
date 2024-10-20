@@ -3,9 +3,14 @@ use super::*;
 use pub_fields::pub_fields;
 extern crate rblue_proc_macro;
 use rblue_proc_macro::ToU8Array;
+use rblue_proc_macro::FromBytes;
 
 pub trait RBlueToU8Array {
     fn to_u8_array(&self) -> Vec<u8>;
+}
+
+pub trait RBlueFromU8Array: Sized {
+    fn from_u8_array(bytes: &[u8]) -> Option<Self>;
 }
 
 #[pub_fields]
@@ -326,7 +331,7 @@ pub struct LESetScanResponseDataRet {
 }
 
 #[pub_fields]
-#[derive(ToU8Array)]
+#[derive(ToU8Array, FromBytes)]
 pub struct LESetAdvertisingEnableCmd {
     advertiseing_enable: bool,
 }

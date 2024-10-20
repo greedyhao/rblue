@@ -17,7 +17,7 @@ macro_rules! create_hci_cmd_table {
 
 pub struct HCICmdTable {
     flag: u16,
-    pub handle: fn(bb: &mut Control, opcode: u16),
+    pub handle: fn(bb: &mut Control, opcode: u16, data: &[u8]),
 }
 
 const fn compute_hci_cmd_flag(byten: u8, bit: u8) -> u16 {
@@ -171,7 +171,7 @@ where
 
 // Controller and Baseband Commands
 
-fn set_event_mask(bb: &mut Control, opcode: u16) {
+fn set_event_mask(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = SetEventMaskRet {
         status: ControllerErrorCode::Ok,
     };
@@ -179,7 +179,7 @@ fn set_event_mask(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn reset(bb: &mut Control, opcode: u16) {
+fn reset(bb: &mut Control, opcode: u16, _data: &[u8]) {
     info!("bb reset");
     // reset
     bb.power_on();
@@ -193,7 +193,7 @@ fn reset(bb: &mut Control, opcode: u16) {
 
 // Informational Parameters
 
-fn read_local_supported_commands(bb: &mut Control, opcode: u16) {
+fn read_local_supported_commands(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = ReadLocalSupportedCommandsRet {
         status: ControllerErrorCode::Ok,
         supported_commands: HCI_CMD_SUPPORTED_BYTES,
@@ -202,7 +202,7 @@ fn read_local_supported_commands(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn read_local_supported_features(bb: &mut Control, opcode: u16) {
+fn read_local_supported_features(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = ReadLocalSupportedFeaturesRet {
         status: ControllerErrorCode::Ok,
         lmp_feature: LMP_SUPPORTED_FEATURES_BYTES,
@@ -211,7 +211,7 @@ fn read_local_supported_features(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn read_buffer_size(bb: &mut Control, opcode: u16) {
+fn read_buffer_size(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = ReadBufferSizeRet {
         status: ControllerErrorCode::Ok,
         acl_data_packet_length: 0,
@@ -223,7 +223,7 @@ fn read_buffer_size(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn read_bd_address(bb: &mut Control, opcode: u16) {
+fn read_bd_address(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = ReadBDAddrRet {
         status: ControllerErrorCode::Ok,
         bd_addr: [0; 6],
@@ -234,7 +234,7 @@ fn read_bd_address(bb: &mut Control, opcode: u16) {
 
 // LE Controller Commands
 
-fn le_set_event_mask(bb: &mut Control, opcode: u16) {
+fn le_set_event_mask(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LESetEventMaskRet {
         status: ControllerErrorCode::Ok,
     };
@@ -242,7 +242,7 @@ fn le_set_event_mask(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_read_buffer_size(bb: &mut Control, opcode: u16) {
+fn le_read_buffer_size(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LEReadBufferSizeRet {
         status: ControllerErrorCode::Ok,
         le_acl_data_packet_length: 0,
@@ -252,7 +252,7 @@ fn le_read_buffer_size(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_read_local_supported_features(bb: &mut Control, opcode: u16) {
+fn le_read_local_supported_features(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LEReadLocalSupportedFeaturesRet {
         status: ControllerErrorCode::Ok,
         le_features: 0,
@@ -261,7 +261,7 @@ fn le_read_local_supported_features(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_set_advertising_parameters(bb: &mut Control, opcode: u16) {
+fn le_set_advertising_parameters(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LESetAdvertisingParametersRet {
         status: ControllerErrorCode::Ok,
     };
@@ -269,7 +269,7 @@ fn le_set_advertising_parameters(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_read_advertising_physical_channel_tx_power(bb: &mut Control, opcode: u16) {
+fn le_read_advertising_physical_channel_tx_power(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LEReadAdvertisingPhysicalChannelTxPowerRet {
         status: ControllerErrorCode::Ok,
         tx_power_level: 0,
@@ -278,7 +278,7 @@ fn le_read_advertising_physical_channel_tx_power(bb: &mut Control, opcode: u16) 
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_set_advertising_data(bb: &mut Control, opcode: u16) {
+fn le_set_advertising_data(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LESetAdvertisingDataRet {
         status: ControllerErrorCode::Ok,
     };
@@ -286,7 +286,7 @@ fn le_set_advertising_data(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_set_scan_response_data(bb: &mut Control, opcode: u16) {
+fn le_set_scan_response_data(bb: &mut Control, opcode: u16, _data: &[u8]) {
     let ret = LESetScanResponseDataRet {
         status: ControllerErrorCode::Ok,
     };
@@ -294,7 +294,9 @@ fn le_set_scan_response_data(bb: &mut Control, opcode: u16) {
     bb_send_event(bb, opcode, ret);
 }
 
-fn le_set_advertising_enable(bb: &mut Control, opcode: u16) {
+fn le_set_advertising_enable(bb: &mut Control, opcode: u16, data: &[u8]) {
+    let _arg = LESetAdvertisingEnableCmd::from_u8_array(data);
+
     let ret = LESetAdvertisingEnableRet {
         status: ControllerErrorCode::Ok,
     };
