@@ -80,6 +80,8 @@ fn create_new_hci(
     let mut hci = HCI::new(bd_addr);
     hci.set_send_packet(cb.host_to_bb);
 
+    hci.power_control(rblue_core::host::HCIPowerMode::On);
+
     use thread_priority::*;
     // host
     thread::spawn(move || {
@@ -177,10 +179,6 @@ fn main() {
     let cb2 = create_sim_stack_cb!(APP2_SIM);
     let addr2 = [2, 0, 0, 0, 0, 0];
     create_new_hci(&mut sim_bb, addr2, &APP2_SIM, &cb2);
-
-    // just test
-    APP1_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
-    // APP2_SIM.get().unwrap().app_to_host.send(BTCmd::On).unwrap();
 
     let bb: thread::JoinHandle<_> = thread::spawn(move || loop {
         sim_bb.run();

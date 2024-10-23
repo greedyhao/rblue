@@ -125,6 +125,9 @@ enum HCIState {
     Off,
     Initializing,
     Working,
+    // Halting,
+    // Sleeping,
+    // FallingSleep,
 }
 
 #[derive(PartialEq)]
@@ -404,10 +407,26 @@ impl HCI {
         }
     }
 
-    fn power_on(&mut self) {
+    pub fn power_control(&mut self, control: HCIPowerMode) {
+        match self.state {
+            HCIState::Off => self.power_control_off(control),
+            _ => {}
+        }
+        self.run();
+    }
+
+    fn power_control_off(&mut self, control: HCIPowerMode) {
+        match control {
+            HCIPowerMode::On => {
+                self.power_enter_initializing_state();
+            }
+            _ => {}
+        }
+    }
+
+    fn power_enter_initializing_state(&mut self) {
         self.state = HCIState::Initializing;
         self.sub_state = HCISubState::SendReset;
-        self.run();
     }
 
     fn recv_ce_data(&mut self, data: Vec<u8>) {
@@ -507,10 +526,6 @@ impl BTCmd {
     pub fn exec(&self, hci: &mut HCI) {
         info!("exec {:?}", self);
         match self {
-            BTCmd::On => {
-                hci.scan_enable = ScanEnable::InquiryEnablePageEnable;
-                hci.power_on();
-            }
             BTCmd::Connect(addr) => {
                 for conn in hci.connections.iter() {
                     // already connected

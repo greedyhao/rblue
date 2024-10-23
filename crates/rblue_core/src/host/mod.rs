@@ -288,3 +288,9 @@ pub trait HCICmdSend {
 // pub trait DiscEnum<T> {
 //     fn discriminant(&self) -> T;
 // }
+
+pub enum HCIPowerMode {
+    Off,
+    On,
+    Sleep,
+}
