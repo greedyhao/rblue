@@ -80,6 +80,7 @@ fn create_new_hci(
     let mut hci = HCI::new(bd_addr);
     hci.set_send_packet(cb.host_to_bb);
 
+    hci.gap_advertisements_enable(true);
     hci.power_control(rblue_core::host::HCIPowerMode::On);
 
     use thread_priority::*;
@@ -176,9 +177,9 @@ fn main() {
     let addr1 = [1, 0, 0, 0, 0, 0];
     create_new_hci(&mut sim_bb, addr1, &APP1_SIM, &cb1);
 
-    let cb2 = create_sim_stack_cb!(APP2_SIM);
-    let addr2 = [2, 0, 0, 0, 0, 0];
-    create_new_hci(&mut sim_bb, addr2, &APP2_SIM, &cb2);
+    // let cb2 = create_sim_stack_cb!(APP2_SIM);
+    // let addr2 = [2, 0, 0, 0, 0, 0];
+    // create_new_hci(&mut sim_bb, addr2, &APP2_SIM, &cb2);
 
     let bb: thread::JoinHandle<_> = thread::spawn(move || loop {
         sim_bb.run();
@@ -188,12 +189,6 @@ fn main() {
     use std::time::Duration;
     std::thread::sleep(Duration::from_secs(1));
 
-    APP1_SIM
-        .get()
-        .unwrap()
-        .app_to_host
-        .send(BTCmd::LEAdvtise(true))
-        .unwrap();
     // pend
     bb.join().unwrap();
 }

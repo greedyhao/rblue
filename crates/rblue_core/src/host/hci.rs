@@ -228,8 +228,12 @@ impl HCI {
     }
 
     fn run(&mut self) {
-        if self.state == HCIState::Initializing {
-            self.init_process();
+        match self.state {
+            HCIState::Initializing => self.init_process(),
+            _ => (),
+        }
+
+        if self.state != HCIState::Working {
             return;
         }
 
@@ -344,13 +348,15 @@ impl HCI {
         }
     }
 
-    fn run_gap_le(&mut self) {
+    fn run_gap_le(&mut self) -> bool {
         // Phase 1: collect what to stop
         let mut advertising_stop = false;
         if self
             .le_advertisements_state
             .contains(LEAdvertisementsState::Active)
         {
+            // stop if:
+            // - parameter change required
             if self
                 .le_advertisements_todo
                 .contains(LEAdvertisementsTodo::SetParams)
@@ -360,6 +366,8 @@ impl HCI {
         }
 
         // Phase 2: stop everything that should be off during modifications
+
+        // Advertising: legacy, extended, periodic
         if advertising_stop {
             self.le_advertisements_state
                 .remove(LEAdvertisementsState::Active);
@@ -367,6 +375,7 @@ impl HCI {
                 advertiseing_enable: false,
             };
             cmd.send(self);
+            return true;
         }
 
         // Phase 3: modify
@@ -389,6 +398,17 @@ impl HCI {
                 advertising_filter_policy: self.le_advertisements_filter_policy.clone(),
             };
             cmd.send(self);
+            return true;
+        }
+
+        if self.le_advertisements_todo.contains(LEAdvertisementsTodo::SetAdvData) {
+            self.le_advertisements_todo.remove(LEAdvertisementsTodo::SetAdvData);
+            // let cmd = LESetAdvertisingDataCmd {
+            //     advertising_data_length: ,
+            //     advertising_data: ,
+            // };
+            // cmd.send(self);
+            return true;
         }
 
         // Phase 4: restore state
@@ -404,7 +424,10 @@ impl HCI {
                 advertiseing_enable: true,
             };
             cmd.send(self);
+            return true;
         }
+
+        return false;
     }
 
     pub fn power_control(&mut self, control: HCIPowerMode) {
@@ -477,37 +500,101 @@ impl HCI {
 
 // gap
 
-// le
+pub trait Gap {
+    fn gap_set_scan_params(
+        &mut self,
+        scan_type: ScanType,
+        scan_interval: u16,
+        scan_window: u16,
+        filter_policy: AdvertisingFilterPolicy,
+    );
 
-pub fn gap_advertisements_set_params(
-    hci: &mut HCI,
-    adv_int_min: u16,
-    adv_int_max: u16,
-    adv_type: AdvertisingType,
-    peer_addr_type: LEAddressType,
-    peer_addr: BDAddr,
-    channel_map: u8,
-    filter_policy: AdvertisingFilterPolicy,
-) {
-    hci.le_advertisements_interval_min = adv_int_min;
-    hci.le_advertisements_interval_max = adv_int_max;
-    hci.le_advertisements_type = adv_type;
-    hci.le_advertisements_peer_address_type = peer_addr_type;
-    hci.le_advertisements_peer_address = peer_addr;
-    hci.le_advertisements_channel_map = channel_map;
-    hci.le_advertisements_filter_policy = filter_policy;
-    hci.run();
+    fn gap_set_scan_parameters(
+        &mut self,
+        scan_type: ScanType,
+        scan_interval: u16,
+        scan_window: u16,
+    );
+
+    fn gap_start_scan(&mut self);
+    fn gap_stop_scan(&mut self);
+
+    fn gap_advertisements_set_data(&mut self, data: &[u8]);
+    fn gap_advertisements_set_params(
+        &mut self,
+        adv_int_min: u16,
+        adv_int_max: u16,
+        adv_type: AdvertisingType,
+        peer_addr_type: LEAddressType,
+        peer_addr: BDAddr,
+        channel_map: u8,
+        filter_policy: AdvertisingFilterPolicy,
+    );
+
+    fn gap_advertisements_enable(&mut self, enable: bool);
 }
 
-pub fn gap_advertisements_enable(hci: &mut HCI, enable: bool) {
-    if enable {
-        hci.le_advertisements_state
-            .insert(LEAdvertisementsState::Enabled);
-    } else {
-        hci.le_advertisements_state
-            .remove(LEAdvertisementsState::Enabled);
+impl Gap for HCI {
+    fn gap_set_scan_params(
+        &mut self,
+        _scan_type: ScanType,
+        _scan_interval: u16,
+        _scan_window: u16,
+        _filter_policy: AdvertisingFilterPolicy,
+    ) {
     }
-    hci.run();
+
+    fn gap_set_scan_parameters(
+        &mut self,
+        scan_type: ScanType,
+        scan_interval: u16,
+        scan_window: u16,
+    ) {
+        self.gap_set_scan_params(
+            scan_type,
+            scan_interval,
+            scan_window,
+            AdvertisingFilterPolicy::UnFilter,
+        );
+    }
+
+    fn gap_start_scan(&mut self) {}
+    fn gap_stop_scan(&mut self) {}
+
+    fn gap_advertisements_set_data(&mut self, _data: &[u8]) {}
+    fn gap_advertisements_set_params(
+        &mut self,
+        adv_int_min: u16,
+        adv_int_max: u16,
+        adv_type: AdvertisingType,
+        peer_addr_type: LEAddressType,
+        peer_addr: BDAddr,
+        channel_map: u8,
+        filter_policy: AdvertisingFilterPolicy,
+    ) {
+        self.le_advertisements_interval_min = adv_int_min;
+        self.le_advertisements_interval_max = adv_int_max;
+        self.le_advertisements_type = adv_type;
+        self.le_advertisements_peer_address_type = peer_addr_type;
+        self.le_advertisements_peer_address = peer_addr;
+        self.le_advertisements_channel_map = channel_map;
+        self.le_advertisements_filter_policy = filter_policy;
+
+        self.le_advertisements_todo.insert(LEAdvertisementsTodo::SetParams);
+        self.le_advertisements_state.insert(LEAdvertisementsState::ParamsSet);
+        self.run();
+    }
+
+    fn gap_advertisements_enable(&mut self, enable: bool) {
+        if enable {
+            self.le_advertisements_state
+                .insert(LEAdvertisementsState::Enabled);
+        } else {
+            self.le_advertisements_state
+                .remove(LEAdvertisementsState::Enabled);
+        }
+        self.run();
+    }
 }
 
 // api
@@ -518,7 +605,6 @@ pub enum BTCmd {
     Off,
     Connect(BDAddr),
 
-    LEAdvtise(bool),
     LEConnect(BDAddr),
 }
 
@@ -549,16 +635,6 @@ impl BTCmd {
                     allow_role_switch: 1,
                 };
                 arg.send(hci);
-            }
-            BTCmd::LEAdvtise(enable) => {
-                if *enable {
-                    hci.le_advertisements_state
-                        .insert(LEAdvertisementsState::Enabled);
-                } else {
-                    hci.le_advertisements_state
-                        .remove(LEAdvertisementsState::Enabled);
-                }
-                hci.run();
             }
             BTCmd::LEConnect(addr) => {
                 for conn in hci.connections.iter() {

@@ -259,8 +259,9 @@ bitflags! {
     #[derive(PartialEq)]
     pub struct LEAdvertisementsState: u8 {
         const Idle = 0;
-        const Active = 0x01;
-        const Enabled = 0x02;
+        const ParamsSet = 1 << 0;
+        const Active = 1 << 1;
+        const Enabled = 1 << 2;
     }
 }
 
