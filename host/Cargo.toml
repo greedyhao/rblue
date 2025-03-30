@@ -1,0 +1,7 @@
+[package]
+name = "rblue-host"  # 关键：添加前缀
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rblue-hci-protocol = { path = "../hci-protocol" }  # 依赖其他子 crate

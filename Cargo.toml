@@ -1,10 +1,15 @@
 [package]
 name = "rblue"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[workspace]
+members = [
+    "host",          # 实际 crate 名会是 rblue-host
+    "hci-protocol",  # 实际 crate 名会是 rblue-hci-protocol
+    "controller",    # 实际 crate 名会是 rblue-controller
+    "phy",           # 实际 crate 名会是 rblue-phy
+]
+resolver = "2"
 
 [dependencies]
-env_logger = "0.11.3"
-log = "0.4.21"
-rblue_core = {path = "crates/rblue_core"}
-rblue_proc_macro = {path = "crates/rblue_proc_macro"}
