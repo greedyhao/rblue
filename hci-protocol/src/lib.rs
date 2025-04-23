@@ -1,14 +1,24 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub enum Error {
+    Ok,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub enum PacketType {
+    Unknown,
+    Command,
+    ACLData,
+    SCOData,
+    Event,
+    ISOData,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub type PacketHandler = fn (PacketType, &[u8]);
+
+pub trait HciDevice {
+    fn open(&self) -> Result<(), Error>;
+    fn close(&self) -> Result<(), Error>;
+    fn register_packet_handler(&mut self, handler: PacketHandler);
+    fn can_send_packet_now(&self, packet_type: PacketType) -> bool;
+    fn send_packet(&self, packet_type: PacketType, packet: &[u8]) -> Result<(), Error>;
+    fn recv_packet(&mut self, packet: &mut [u8]);
+    fn set_baudrate(&self, baudrate: u32) -> Result<(), Error>;
 }
